@@ -13,7 +13,7 @@ Everything runs on free tiers.
 | **Octopart port** | `substrate/parts/` | Nexar GraphQL (Octopart) with a hard part budget, plus free Mouser and DigiKey fallbacks behind one interface. Snapshots build each part's own lead-time and price history. |
 | **Scoring engine** | `substrate/signals.py`, `scoring.py` | Supply risk, price trend and confidence (0–100). Every score decomposes into named, weighted inputs with the evidence sentence and source link. |
 | **Backtest & calibration** | `substrate/backtest.py` | Walk-forward test of the price score against the next 3 months of the semiconductor PPI, 2014 to today, with publication lags applied. The lead-time backtest switches on as part history accumulates. |
-| **Automated reporter** | `substrate/briefing.py` | Twice-daily briefings. Gemini writes the prose, but every number comes from the engine. A deterministic template writer is the fallback. |
+| **Automated reporter** | `substrate/briefing.py` | Twice-daily briefings. Groq (gpt-oss-120b, free tier) writes the prose, but every number comes from the engine. A deterministic template writer is the fallback. |
 | **BOM ingestion** | `substrate/bom.py` | Any CSV with a part-number column. Headers are matched loosely (MPN, Mfr Part Number, EAU, Unit Cost…). |
 | **Dashboard** | `site/` (GitHub Pages) | Briefings, segment scores with drill-down, BOM watchlist with scenario sliders, part lookup, negotiation chat, peer inventory, backtest |
 | **Chat + live lookup API** | `worker/` (Cloudflare Workers) | Negotiation briefs and scenario Q&A. Keys stay server-side. |
@@ -26,7 +26,7 @@ Everything runs on free tiers.
         │              │
   Octopart/Mouser ─────┤
                        ▼
-            signals ─► scores ─► briefing (Gemini | template)
+            signals ─► scores ─► briefing (Groq | template)
                        │
                        ▼
              site/data/*.json ─► GitHub Pages dashboard ◄── Chrome extension
@@ -60,7 +60,7 @@ python -m substrate decide MT40A1G16TB-062E:F "locked 2Q pricing" --why "price t
 | Key | Unlocks | Without it |
 |---|---|---|
 | `SEC_CONTACT_EMAIL` | Supplier and peer inventory days, earnings-release commentary | SEC is skipped. SEC requires a contact email in the User-Agent. |
-| `GEMINI_API_KEY` ([AI Studio](https://aistudio.google.com/apikey)) | LLM-written briefings, conversational chat | Template writer, deterministic negotiation briefs |
+| `GROQ_API_KEY` ([Groq console](https://console.groq.com/keys)) | LLM-written briefings, conversational chat (free tier: 1K requests/day) | Template writer, deterministic negotiation briefs |
 | `NEXAR_CLIENT_ID/SECRET` ([Nexar](https://portal.nexar.com)) | Octopart lead time, stock, sellers, median price | Falls back to Mouser/DigiKey |
 | `MOUSER_API_KEY` / `DIGIKEY_*` | Free part data, about 1,000 calls/day | Part scores use segment signals only |
 

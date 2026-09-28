@@ -5,7 +5,7 @@
  *   GET  /api/part?mpn=...   BOM snapshot -> edge cache -> Octopart (Nexar) -> Mouser
  *   POST /api/chat           { messages: [{role, content}], mpn? }
  *
- * Secrets (wrangler secret put ...): GEMINI_API_KEY, NEXAR_CLIENT_ID, NEXAR_CLIENT_SECRET,
+ * Secrets (wrangler secret put ...): GROQ_API_KEY (or GEMINI_API_KEY), NEXAR_CLIENT_ID, NEXAR_CLIENT_SECRET,
  * MOUSER_API_KEY, ACCESS_CODE (optional but recommended; protects your free quotas).
  * Vars (wrangler.toml): SITE_URL, GEMINI_MODEL, NEXAR_MONTHLY_PART_BUDGET.
  * Optional KV binding BUDGET enforces the Nexar monthly budget across all edge locations.
@@ -201,6 +201,37 @@ async function handlePart(env, url, ctx) {
 }
 
 // ---------------- chat ----------------
+// Groq free tier: 30 req/min, 1K req/day, 8K tokens/min, so prompts stay compact.
+async function groq(env, prompt) {
+  const model = env.GROQ_MODEL || "openai/gpt-oss-120b";
+  const body = { model, temperature: 0.4, max_completion_tokens: 1500,
+    messages: [{ role: "system", content: SYSTEM }, { role: "user", content: prompt }] };
+  if (model.includes("gpt-oss")) Object.assign(body, { reasoning_effort: "low", include_reasoning: false });
+  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${env.GROQ_API_KEY}` },
+    body: JSON.stringify(body),
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j?.error?.message || `groq ${r.status}`);
+  const text = j.choices?.[0]?.message?.content || "";
+  if (!text.trim()) throw new Error("empty response");
+  return { reply: text, model: `groq/${model}` };
+}
+
+function compactContext(ctx, question) {
+  const q = question.toUpperCase();
+  const c = { ...ctx, latest_briefing: (ctx.latest_briefing || "").split("**Sources**")[0].slice(0, 2000) };
+  for (let level = 0; level < 4; level++) {
+    let bom = ctx.bom || [];
+    if (level >= 1) bom = bom.map((p) => (q.includes(p.mpn) ? p : { mpn: p.mpn, segment: p.segment, supply_risk: p.supply_risk, price_trend: p.price_trend }));
+    if (level >= 2) { c.headlines = (ctx.headlines || []).slice(0, 6).map((h) => h.title); delete c.peer_inventory_days; }
+    if (level >= 3) c.latest_briefing = c.latest_briefing.slice(0, 600);
+    const out = JSON.stringify({ ...c, bom });
+    if (out.length <= 11000) return out;
+  }
+  return JSON.stringify({ ...c, bom: [] }).slice(0, 11000);
+}
+
 async function gemini(env, prompt) {
   const model = env.GEMINI_MODEL || "gemini-flash-lite-latest";
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
@@ -217,7 +248,7 @@ async function gemini(env, prompt) {
 }
 
 async function handleChat(env, request, ctx) {
-  if (!env.GEMINI_API_KEY) return json({ error: "GEMINI_API_KEY not configured on the worker" }, 503);
+  if (!env.GROQ_API_KEY && !env.GEMINI_API_KEY) return json({ error: "No LLM key (GROQ_API_KEY) configured on the worker" }, 503);
   const body = await request.json().catch(() => ({}));
   const msgs = (body.messages || []).filter((m) => ["user", "assistant"].includes(m.role) && typeof m.content === "string")
     .slice(-8).map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
@@ -230,10 +261,13 @@ async function handleChat(env, request, ctx) {
     u.search = `?mpn=${encodeURIComponent(body.mpn)}`;
     part = await (await handlePart(env, u, ctx)).json();
   }
-  const convo = msgs.map((m) => `${m.role.toUpperCase()}: ${m.content}`).join("\n");
-  const prompt = `Customer market context (JSON):\n${JSON.stringify(context).slice(0, 24000)}\n\n` +
-    (part ? `Live part lookup:\n${JSON.stringify(part).slice(0, 4000)}\n\n` : "") +
+  const convo = msgs.slice(-6).map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 1500)}`).join("\n");
+  const prompt = `Customer market context (JSON):\n${compactContext(context, msgs[msgs.length - 1].content)}\n\n` +
+    (part ? `Live part lookup:\n${JSON.stringify(part).slice(0, 2500)}\n\n` : "") +
     `Conversation:\n${convo}\n\nAnswer the last USER message.`;
+  if (env.GROQ_API_KEY) {
+    try { return json(await groq(env, prompt)); } catch (e) { if (!env.GEMINI_API_KEY) throw e; }
+  }
   return json(await gemini(env, prompt));
 }
 
@@ -242,7 +276,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
     const url = new URL(request.url);
     if (url.pathname === "/api/health") {
-      return json({ ok: true, llm: !!env.GEMINI_API_KEY, octopart: !!env.NEXAR_CLIENT_ID, mouser: !!env.MOUSER_API_KEY, gated: !!env.ACCESS_CODE });
+      return json({ ok: true, llm: !!(env.GROQ_API_KEY || env.GEMINI_API_KEY), octopart: !!env.NEXAR_CLIENT_ID, mouser: !!env.MOUSER_API_KEY, gated: !!env.ACCESS_CODE });
     }
     if (env.ACCESS_CODE && request.headers.get("x-access-code") !== env.ACCESS_CODE) return json({ error: "invalid access code" }, 401);
     if (limited(request.headers.get("cf-connecting-ip") || "anon")) return json({ error: "slow down" }, 429);

@@ -147,8 +147,8 @@ def write(con, results: dict, use_llm: bool = True) -> dict:
     body, model = None, "template"
     if use_llm and llm.available():
         prompt = (f"{FORMAT}\n\nEdition: {ctx['edition']} briefing for {ctx['customer']}.\n"
-                  f"Context JSON:\n{json.dumps({k: v for k, v in ctx.items() if k != 'sources'}, indent=1)}\n\n"
-                  f"Numbered sources:\n" + "\n".join(f"[{i}] {s['title']}" for i, s in enumerate(ctx["sources"], 1)))
+                  f"Context JSON:\n{json.dumps({k: v for k, v in ctx.items() if k != 'sources'}, separators=(',', ':'))}\n\n"
+                  f"Numbered sources:\n" + "\n".join(f"[{i}] {s['title'][:120]}" for i, s in enumerate(ctx["sources"], 1)))
         try:
             body, model = llm.generate(prompt, system=SYSTEM, temperature=0.3)
         except Exception as e:

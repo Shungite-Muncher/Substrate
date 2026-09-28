@@ -7,7 +7,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from . import backtest, chat, config, db, parts, scoring
+from . import backtest, chat, config, db, llm, parts, scoring
 from . import bom as bom_mod
 
 
@@ -43,7 +43,7 @@ class Handler(SimpleHTTPRequestHandler):
             mpn = (parse_qs(u.query).get("mpn") or [""])[0]
             return self._json(_part_payload(mpn) if mpn else {"error": "mpn required"}, 200 if mpn else 400)
         if u.path == "/api/health":
-            return self._json({"ok": True, "providers": parts.configured(), "llm": bool(config.GEMINI_API_KEY)})
+            return self._json({"ok": True, "providers": parts.configured(), "llm": llm.available()})
         return super().do_GET()
 
     def do_POST(self):

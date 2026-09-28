@@ -42,7 +42,9 @@ def env(name: str, default: str | None = None) -> str | None:
 SEC_CONTACT_EMAIL = env("SEC_CONTACT_EMAIL")
 USER_AGENT = "Mozilla/5.0 (compatible; SubstrateBot/0.1; +https://github.com/Shungite-Muncher/Substrate)"
 
-# LLM (Google Gemini free tier). Leave unset to use the template writer.
+# LLM: Groq free tier (primary), Gemini (optional fallback). Leave both unset to use the template writer.
+GROQ_API_KEY = env("GROQ_API_KEY")
+GROQ_MODEL = env("GROQ_MODEL")  # optional; default openai/gpt-oss-120b
 GEMINI_API_KEY = env("GEMINI_API_KEY")
 GEMINI_MODEL = env("GEMINI_MODEL")  # optional pin; otherwise auto-selected
 

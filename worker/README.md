@@ -5,7 +5,7 @@ A Cloudflare Worker serving `/api/chat` and `/api/part` for the hosted dashboard
 ```bash
 cd worker
 npx wrangler login
-npx wrangler secret put GEMINI_API_KEY        # free key from https://aistudio.google.com/apikey
+npx wrangler secret put GROQ_API_KEY          # free key from https://console.groq.com/keys
 npx wrangler secret put ACCESS_CODE           # any passphrase; share it with demo users
 npx wrangler secret put NEXAR_CLIENT_ID       # optional: Octopart via https://portal.nexar.com
 npx wrangler secret put NEXAR_CLIENT_SECRET   # optional

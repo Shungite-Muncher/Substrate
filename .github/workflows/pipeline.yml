@@ -38,6 +38,7 @@ jobs:
       - name: Scrape, score, brief, export
         env:
           SEC_CONTACT_EMAIL: ${{ secrets.SEC_CONTACT_EMAIL }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           NEXAR_CLIENT_ID: ${{ secrets.NEXAR_CLIENT_ID }}
           NEXAR_CLIENT_SECRET: ${{ secrets.NEXAR_CLIENT_SECRET }}

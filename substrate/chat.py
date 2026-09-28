@@ -24,6 +24,29 @@ def load_context() -> dict:
         return {}
 
 
+def compact_context(ctx: dict, question: str, budget: int = llm.MAX_PROMPT_CHARS - 5000) -> str:
+    """Fit the context into the free-tier token budget: parts named in the question
+    stay in full; the rest of the BOM and the briefing shrink first."""
+    q = question.upper()
+    c = dict(ctx)
+    c["latest_briefing"] = (c.get("latest_briefing") or "").split("**Sources**")[0][:2000]
+    for level in range(4):
+        bom = c.get("bom", [])
+        if level >= 1:
+            bom = [p if p["mpn"] in q else {k: p[k] for k in ("mpn", "segment", "supply_risk", "price_trend")} for p in bom]
+        if level >= 2:
+            c["headlines"] = [h["title"] for h in ctx.get("headlines", [])[:6]]
+            c.pop("peer_inventory_days", None)
+        if level >= 3:
+            c["latest_briefing"] = c["latest_briefing"][:600]
+            c["segments"] = {k: {kk: v[kk] for kk in ("label", "supply_risk", "price_trend", "labels")} | {"drivers": v["drivers"][:1]}
+                             for k, v in ctx.get("segments", {}).items()}
+        out = json.dumps({**c, "bom": bom}, separators=(",", ":"))
+        if len(out) <= budget:
+            return out
+    return out[:budget]
+
+
 def _find_part(ctx: dict, text: str) -> dict | None:
     t = text.upper()
     return next((p for p in ctx.get("bom", []) if p["mpn"] in t), None)
@@ -41,7 +64,7 @@ def fallback_answer(ctx: dict, question: str) -> str:
         lines += [f"- {s['label']}: supply {s['supply_risk']:.0f}, price {s['price_trend']:.0f}. {s['drivers'][0] if s['drivers'] else ''}"
                   for s in segs[:3]]
         lines += ["", "_Name a part number from your BOM for a full negotiation brief. "
-                      "(Template mode: set GEMINI_API_KEY for conversational answers.)_"]
+                      "(Template mode: set GROQ_API_KEY for conversational answers.)_"]
         return "\n".join(lines)
     tight = p["supply_risk"] >= 54
     rising = p["price_trend"] >= 53
@@ -64,7 +87,7 @@ def fallback_answer(ctx: dict, question: str) -> str:
         gap = (p["price_1k"] / p["target_price"] - 1) * 100
         lines.append(f"- Market 1k price ${p['price_1k']:.3f} vs your target ${p['target_price']:.3f} ({gap:+.0f}%)")
     lines += ["", "**Walk-away.** Qualify a second source or pin-compatible alternate before the next review.",
-              "", "_Template mode: set GEMINI_API_KEY for conversational answers._"]
+              "", "_Template mode: set GROQ_API_KEY for conversational answers._"]
     return "\n".join(lines)
 
 
@@ -73,9 +96,9 @@ def answer(messages: list[dict], part: dict | None = None) -> dict:
     question = messages[-1]["content"] if messages else ""
     if not llm.available():
         return {"reply": fallback_answer(ctx, question), "model": "template"}
-    convo = "\n".join(f"{m['role'].upper()}: {m['content']}" for m in messages[-8:])
-    prompt = (f"Customer market context (JSON):\n{json.dumps(ctx)[:24000]}\n\n"
-              + (f"Live part lookup:\n{json.dumps(part)[:4000]}\n\n" if part else "")
+    convo = "\n".join(f"{m['role'].upper()}: {m['content'][:1500]}" for m in messages[-6:])
+    prompt = (f"Customer market context (JSON):\n{compact_context(ctx, question)}\n\n"
+              + (f"Live part lookup:\n{json.dumps(part, separators=(',', ':'))[:2500]}\n\n" if part else "")
               + f"Conversation:\n{convo}\n\nAnswer the last USER message.")
     try:
         text, model = llm.generate(prompt, system=SYSTEM, lite=True, temperature=0.4)
