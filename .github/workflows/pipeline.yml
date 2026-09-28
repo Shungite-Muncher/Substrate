@@ -1,0 +1,75 @@
+name: Briefings pipeline
+
+on:
+  schedule:
+    - cron: "30 23 * * *"   # Asia-open edition (Tokyo/Taipei open 00:00-01:00 UTC)
+    - cron: "0 13 * * *"    # U.S.-open edition (NYSE opens 13:30 UTC in summer, 14:30 in winter)
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "Pull multi-year history (first run)"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/workflows/pipeline.yml"]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: substrate-pipeline
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Scrape, score, brief, export
+        env:
+          SEC_CONTACT_EMAIL: ${{ secrets.SEC_CONTACT_EMAIL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NEXAR_CLIENT_ID: ${{ secrets.NEXAR_CLIENT_ID }}
+          NEXAR_CLIENT_SECRET: ${{ secrets.NEXAR_CLIENT_SECRET }}
+          MOUSER_API_KEY: ${{ secrets.MOUSER_API_KEY }}
+          DIGIKEY_CLIENT_ID: ${{ secrets.DIGIKEY_CLIENT_ID }}
+          DIGIKEY_CLIENT_SECRET: ${{ secrets.DIGIKEY_CLIENT_SECRET }}
+          SUBSTRATE_CUSTOMER: ${{ vars.SUBSTRATE_CUSTOMER || 'Demo Distributor' }}
+          SUBSTRATE_PEERS: ${{ vars.SUBSTRATE_PEERS || 'ARW,AVT' }}
+        run: python -m substrate run ${{ inputs.backfill && '--backfill' || '' }}
+      - name: Commit accumulated data
+        run: |
+          git config user.name "substrate-bot"
+          git config user.email "substrate-bot@users.noreply.github.com"
+          git add data/warehouse data/calibration.json site/data
+          git diff --cached --quiet || git commit -m "data: $(date -u +'%Y-%m-%d %H:%M') UTC briefing"
+          git pull --rebase --autostash
+          git push
+
+  deploy:
+    needs: pipeline
+    if: always() && (needs.pipeline.result == 'success' || needs.pipeline.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

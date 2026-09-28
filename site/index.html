@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Substrate</title>
+<meta name="description" content="Market intelligence for semiconductor procurement">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230f766e'/><path d='M8 22h16M8 16h16M8 10h16' stroke='white' stroke-width='3' stroke-linecap='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M8 22h16M8 16h16M8 10h16" stroke="white" stroke-width="3" stroke-linecap="round"/></svg>
+    <span>Substrate</span>
+  </div>
+  <nav id="tabs" role="tablist">
+    <button data-tab="briefing" class="active">Briefing</button>
+    <button data-tab="market">Market</button>
+    <button data-tab="bom">BOM watchlist</button>
+    <button data-tab="lookup">Part lookup</button>
+    <button data-tab="chat">Negotiation chat</button>
+    <button data-tab="peers">Peers</button>
+    <button data-tab="backtest">Backtest</button>
+  </nav>
+  <div class="meta" id="meta"></div>
+</header>
+
+<main>
+  <section id="tab-briefing" class="tab active">
+    <div class="grid-brief">
+      <article id="briefing" class="card prose"></article>
+      <aside class="card">
+        <h3>Archive</h3>
+        <ul id="archive" class="archive"></ul>
+        <h3 style="margin-top:1.5rem">Latest headlines</h3>
+        <ul id="headlines" class="headlines"></ul>
+      </aside>
+    </div>
+  </section>
+
+  <section id="tab-market" class="tab">
+    <div class="scorebar" id="market-scores"></div>
+    <h2 class="section">Segments</h2>
+    <p class="hint">Click a segment to see every input behind its scores.</p>
+    <div class="segments" id="segments"></div>
+    <div class="card" id="segment-detail" hidden></div>
+    <h2 class="section">Market data</h2>
+    <div class="charts">
+      <div class="card"><h3>TSMC monthly revenue <small>NT$ bn</small></h3><canvas id="c-tsmc"></canvas></div>
+      <div class="card"><h3>Global chip sales <small>SIA/WSTS 3MMA, US$ bn</small></h3><canvas id="c-sia"></canvas></div>
+      <div class="card"><h3>Fab capacity utilization <small>Fed G.17, %</small></h3><canvas id="c-cu"></canvas></div>
+      <div class="card"><h3>Semiconductor PPI <small>BLS index</small></h3><canvas id="c-ppi"></canvas></div>
+    </div>
+  </section>
+
+  <section id="tab-bom" class="tab">
+    <div class="row-between">
+      <div>
+        <h2 class="section" style="margin-top:0">BOM watchlist <small id="bom-customer"></small></h2>
+        <p class="hint">Scores blend each part's own supply data (Octopart / distributor APIs) with its segment's market signals. Click a part for drivers, scenarios and a negotiation brief.</p>
+      </div>
+      <label class="btn secondary">Preview a BOM CSV<input type="file" id="bom-file" accept=".csv" hidden></label>
+    </div>
+    <div class="card table-wrap"><table id="bom-table"></table></div>
+    <div class="card" id="part-detail" hidden></div>
+  </section>
+
+  <section id="tab-lookup" class="tab">
+    <div class="card lookup">
+      <h2 class="section" style="margin-top:0">Part lookup</h2>
+      <form id="lookup-form" class="inline-form">
+        <input id="lookup-mpn" placeholder="Manufacturer part number, e.g. STM32F407VGT6" autocomplete="off" required>
+        <button class="btn">Look up</button>
+      </form>
+      <p class="hint">BOM parts answer instantly from the published snapshot. Other parts go to the live API (Octopart first, then free distributor APIs) and are cached.</p>
+    </div>
+    <div id="lookup-result"></div>
+  </section>
+
+  <section id="tab-chat" class="tab">
+    <div class="card chat">
+      <div class="chat-log" id="chat-log">
+        <div class="msg bot">Ask for a negotiation brief (<em>"Prep me for a TI meeting on TPS62130RGTR"</em>), a scenario (<em>"What if DDR4 lead times hit 30 weeks?"</em>), or where the market is heading for a segment.</div>
+      </div>
+      <form id="chat-form" class="chat-form">
+        <textarea id="chat-input" rows="2" placeholder="Ask Substrate…" required></textarea>
+        <button class="btn">Send</button>
+      </form>
+      <div class="chips" id="chat-chips"></div>
+      <p class="hint" id="chat-status"></p>
+    </div>
+  </section>
+
+  <section id="tab-peers" class="tab">
+    <div class="card">
+      <h2 class="section" style="margin-top:0">Days of inventory: peers and suppliers</h2>
+      <p class="hint">Inventory ÷ quarterly cost of revenue × 91, from SEC XBRL filings. Falling inventory at suppliers means tighter supply. Peers show where competitors sit.</p>
+      <canvas id="c-inv"></canvas>
+      <div id="inv-empty" class="hint"></div>
+    </div>
+  </section>
+
+  <section id="tab-backtest" class="tab">
+    <div class="card" id="backtest"></div>
+    <div class="card"><h3>Price score vs. next-3-month PPI change</h3><canvas id="c-bt"></canvas></div>
+  </section>
+</main>
+
+<footer>
+  Substrate holds no inventory and takes no position on what customers buy. Scores come from public data: TSMC, SIA/WSTS, Federal Reserve, BLS, SEC EDGAR, trade press, and Octopart/distributor APIs.
+  <button id="settings-btn" class="linkish">API settings</button>
+</footer>
+
+<dialog id="settings">
+  <form method="dialog" class="settings-form">
+    <h3>API settings</h3>
+    <label>Chat / live lookup API URL<input id="set-api" placeholder="https://substrate-api.you.workers.dev"></label>
+    <label>Access code<input id="set-code" type="password" autocomplete="off"></label>
+    <p class="hint">Stored only in this browser. Leave the URL blank on localhost.</p>
+    <div class="row-end"><button class="btn secondary" value="cancel">Cancel</button><button class="btn" id="set-save" value="ok">Save</button></div>
+  </form>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

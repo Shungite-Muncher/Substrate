@@ -1,0 +1,17 @@
+MPN,Manufacturer,Description,Segment,Annual Qty,Target Price,Supplier
+STM32F407VGT6,STMicroelectronics,ARM Cortex-M4 MCU 1MB Flash LQFP-100,mcu,120000,7.10,STMicroelectronics
+ATSAMD21G18A-AU,Microchip,ARM Cortex-M0+ MCU 256KB TQFP-48,mcu,250000,2.35,Microchip
+LPC55S69JBD100,NXP,Dual Cortex-M33 MCU 640KB HLQFP-100,mcu,60000,5.90,NXP
+MT40A1G16TB-062E:F,Micron,DDR4 16Gb x16 3200 FBGA-96,memory,400000,4.80,Micron
+MT25QL128ABA1EW9-0SIT,Micron,128Mb SPI NOR Flash,memory,300000,1.45,Micron
+W25Q128JVSIQ,Winbond,128Mb SPI NOR Flash SOIC-8,memory,500000,0.92,Winbond
+TPS62130RGTR,Texas Instruments,3-17V 3A Step-Down Converter QFN-16,analog,350000,1.10,Texas Instruments
+LM358DR,Texas Instruments,Dual Op Amp SOIC-8,analog,1000000,0.09,Texas Instruments
+ADS1115IDGSR,Texas Instruments,16-bit ADC I2C VSSOP-10,analog,150000,2.60,Texas Instruments
+AD8605ARTZ-REEL7,Analog Devices,Precision CMOS Op Amp SOT-23-5,analog,200000,0.95,Analog Devices
+LTC3780EGN#PBF,Analog Devices,Buck-Boost Controller SSOP-24,analog,40000,5.20,Analog Devices
+XC7A35T-1CSG324C,AMD,Artix-7 FPGA 33K LC CSBGA-324,logic,20000,38.00,AMD
+10M08SAE144C8G,Intel,MAX 10 FPGA 8K LE EQFP-144,logic,25000,11.50,Intel
+NTMFS5C430NLT1G,onsemi,40V N-Ch MOSFET SO-8FL,power,600000,0.55,onsemi
+C3M0065090D,Wolfspeed,900V 65mOhm SiC MOSFET TO-247,power,30000,6.40,Wolfspeed
+IPB017N10N5ATMA1,Infineon,100V N-Ch OptiMOS 5 D2PAK,power,80000,3.10,Infineon

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+data/substrate.db
+data/substrate.db-journal
+data/.http_cache/
+worker/node_modules/
+worker/.wrangler/
+worker/.dev.vars
+*.zip

@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Substrate extension settings</title>
+<style>
+  body { font: 14px/1.5 system-ui, "Segoe UI", sans-serif; max-width: 520px; margin: 2rem auto; padding: 0 1rem; color: #111827; }
+  label { display: block; margin: 1rem 0 .3rem; font-weight: 600; }
+  input { width: 100%; padding: .5rem .6rem; border: 1px solid #d1d5db; border-radius: 7px; font: inherit; box-sizing: border-box; }
+  small { color: #5b6474; }
+  button { margin-top: 1.2rem; background: #0f766e; color: #fff; border: 0; border-radius: 7px; padding: .55rem 1rem; font-weight: 600; cursor: pointer; }
+  #ok { margin-left: .6rem; color: #0f766e; }
+</style>
+</head>
+<body>
+  <h2>Substrate extension settings</h2>
+  <label for="site">Dashboard URL</label>
+  <input id="site" placeholder="https://you.github.io/Substrate">
+  <small>Where the pipeline publishes data (GitHub Pages), or http://localhost:8787 when running locally.</small>
+  <label for="api">API URL <small>(optional)</small></label>
+  <input id="api" placeholder="https://substrate-api.you.workers.dev">
+  <small>Needed for live lookups of parts outside your BOM.</small>
+  <label for="code">Access code <small>(if the API is gated)</small></label>
+  <input id="code" type="password">
+  <button id="save">Save</button><span id="ok"></span>
+  <script src="common.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

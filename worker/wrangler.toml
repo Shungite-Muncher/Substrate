@@ -1,0 +1,17 @@
+name = "substrate-api"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# Your GitHub Pages URL (no trailing slash)
+SITE_URL = "https://shungite-muncher.github.io/Substrate"
+# Leave empty to use Google's auto-updating "gemini-flash-lite-latest" alias
+GEMINI_MODEL = ""
+NEXAR_MONTHLY_PART_BUDGET = "40"
+
+# Optional: a free KV namespace makes the Nexar budget global across edge locations.
+#   npx wrangler kv namespace create BUDGET
+# then uncomment and paste the id:
+# [[kv_namespaces]]
+# binding = "BUDGET"
+# id = "<id>"
