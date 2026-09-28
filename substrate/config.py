@@ -34,8 +34,8 @@ _load_dotenv()
 
 
 def env(name: str, default: str | None = None) -> str | None:
-    v = os.environ.get(name)
-    return v if v not in (None, "") else default
+    v = (os.environ.get(name) or "").strip().lstrip("﻿").strip()  # secrets piped from PowerShell can carry a BOM
+    return v or default
 
 
 # SEC fair-access policy requires a descriptive User-Agent with a contact email.
