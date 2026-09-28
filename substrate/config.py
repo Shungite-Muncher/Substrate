@@ -22,7 +22,12 @@ def _load_dotenv() -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         k, v = line.split("=", 1)
-        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+        v = v.strip()
+        if v[:1] in ('"', "'") and v[0] in v[1:]:
+            v = v[1:v.index(v[0], 1)]
+        else:
+            v = "" if v.startswith("#") else v.split(" #", 1)[0].split("\t#", 1)[0].strip()  # drop inline comments
+        os.environ.setdefault(k.strip(), v)
 
 
 _load_dotenv()
