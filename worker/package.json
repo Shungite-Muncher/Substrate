@@ -1,0 +1,16 @@
+{
+  "name": "worker",
+  "version": "1.0.0",
+  "description": "A Cloudflare Worker serving `/api/chat` and `/api/part` for the hosted dashboard and the Chrome extension. The free tier (100k requests/day) is far more than a demo needs, and your API keys stay server-side.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "wrangler": "^4.143.0"
+  }
+}
