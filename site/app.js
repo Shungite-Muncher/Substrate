@@ -43,6 +43,7 @@ function showTab(name) {
   $$(".tab").forEach((t) => t.classList.toggle("active", t.id === `tab-${name}`));
   store.set("substrate.tab", name);
   if (name === "market") drawMarketCharts();
+  if (name === "outlook") drawOutlook();
   if (name === "peers") drawPeers();
   if (name === "backtest") drawBacktest();
 }
@@ -183,6 +184,10 @@ function renderPartDetail(p, host) {
       <div><span>Annual usage</span><b>${fmt(p.annual_qty)}</b></div>
       <div><span>Data</span><b>${esc(p.provider || "none")} ${esc(p.data_day || "")}</b></div>
     </div>
+    ${p.outlook ? `<div class="scenario"><b>3-month outlook</b> ${actBadge(p.outlook.action)}
+      <div style="margin-top:.4rem">${pct(p.outlook.p_price_up)} chance prices rise · ${pct(p.outlook.p_supply_tighter)} chance supply tightens${
+        p.outlook.lead_projection ? ` · lead time ${fmt(p.outlook.lead_projection.now_weeks)} → ${fmt(p.outlook.lead_projection.in_13w_weeks)} wk projected` : ""}</div>
+      <small>${esc(p.outlook.why)}</small></div>` : ""}
     <div class="scenario"><b>Scenario model</b> <small>What would supply risk be if…</small>
       <label>Lead time <input type="range" min="2" max="60" value="${lw}" data-lt><span data-ltv>${lw} wk</span></label>
       <label>Channel stock <input type="range" min="0" max="${Math.round(stMax)}" step="${Math.max(1, Math.round(stMax / 200))}" value="${st}" data-st><span data-stv>${fmt(st)}</span></label>
@@ -370,6 +375,102 @@ async function drawBacktest() {
   });
 }
 
+// ---------- outlook (predictive layer) --------------------------------------------
+const ACTION_COLOR = { "Buy ahead / lock pricing": "--risk-hi", "Wait / keep terms short": "--risk-lo", "Hold course": null };
+const actBadge = (a) => `<span class="act" style="background:${ACTION_COLOR[a] ? css(ACTION_COLOR[a]) : "#6b7280"}">${esc(a)}</span>`;
+const pct = (x, d = 0) => (x == null ? "–" : fmt(x * 100, d) + "%");
+const signed = (x, d = 1) => (x == null ? "–" : (x > 0 ? "+" : "") + fmt(x, d));
+let FC = null, trTarget = "ppi_3m";
+
+function renderOutlook() {
+  const o = DATA.outlook;
+  if (!o) { $("#forecast-cards").innerHTML = `<div class="card empty">No forecasts yet. They run with the pipeline.</div>`; return; }
+  const any = Object.values(o.forecasts)[0];
+  $("#outlook-asof").textContent = any ? `· data through ${any.base_period}` : "";
+  $("#forecast-cards").innerHTML = Object.entries(o.forecasts).map(([k, f]) => {
+    const m = f.metrics, edge = m.verdict === "edge";
+    const pColor = riskColor(50 + (f.prob_up - 0.5) * 100);
+    const range = f.lo == null ? "" : ` <small>(80% range ${signed(f.lo)} to ${signed(f.hi)}${esc(f.unit)})</small>`;
+    return `<div class="card fc">
+      <h3>${esc(f.label)}</h3>
+      <div class="p" style="color:${pColor}">${pct(f.prob_up)} <small>chance ${esc(f.up)}</small></div>
+      <div class="exp">Expected ${signed(f.point)}${esc(f.unit)}${range}</div>
+      <span class="tag ${edge ? "edge" : "base"}">${edge ? "Tested edge over trend-following" : "Trend-following baseline: no tested edge yet"}</span>
+      <div class="stats">Out of sample ${esc(m.window?.[0] || "")}–${esc(m.window?.[1] || "")} (${m.n} months):
+        direction right ${pct(m.hit_rate_model)} (trend ${pct(m.hit_rate_trend)}), probability skill vs trend ${signed((m.skill_vs_trend || 0) * 100)}%,
+        80% range held ${pct(m.interval_coverage_80)}.</div>
+      <details><summary>What's driving the model</summary><div class="drv">${f.drivers.map((d) =>
+        `<span>${esc(d.label)} <small>(${fmt(d.value, 1)})</small></span>${normbar(Math.max(-1, Math.min(1, d.logodds / 2)))}`).join("")}</div>
+        <p class="hint" style="margin:.4rem 0 0">Model probability ${pct(f.prob_model)} · trend-following ${pct(f.prob_trend)} · showing the ${esc(f.basis)}.</p></details>
+    </div>`;
+  }).join("");
+
+  const parts = [...DATA.parts].filter((p) => p.outlook).sort((a, b) => b.outlook.p_price_up - a.outlook.p_price_up);
+  $("#timing-table").innerHTML = `<thead><tr><th>Part</th><th>Call</th><th class="num">P(price up, 3 mo)</th><th class="num">P(supply tighter)</th><th class="num">Lead now → in 13 wk</th><th>Why</th></tr></thead><tbody>` +
+    parts.map((p) => {
+      const q = p.outlook, lp = q.lead_projection;
+      return `<tr><td class="mono">${esc(p.mpn)}</td><td>${actBadge(q.action)}</td><td class="num">${pct(q.p_price_up)}</td><td class="num">${pct(q.p_supply_tighter)}</td>
+        <td class="num">${lp ? `${fmt(lp.now_weeks)} → <b>${fmt(lp.in_13w_weeks)}</b> wk` : "<small>needs part data</small>"}</td><td>${esc(q.why)}</td></tr>`;
+    }).join("") + "</tbody>";
+
+  $("#seg-outlook").innerHTML = `<thead><tr><th>Segment</th><th>Supply, 3 mo</th><th class="num">P(tighter)</th><th>Prices, 3 mo</th><th class="num">P(up)</th></tr></thead><tbody>` +
+    Object.values(o.segments || {}).map((s) => `<tr><td>${esc(s.label)}</td><td>${esc(s.supply_call)}</td><td class="num">${pct(s.p_supply_tighter)}</td>
+      <td>${esc(s.price_call)}</td><td class="num">${pct(s.p_price_up)}</td></tr>`).join("") + "</tbody>";
+
+  const L = o.ledger;
+  $("#ledger").innerHTML = `<div class="ledger-stats"><div><b>${L.made}</b><span>forecasts logged</span></div><div><b>${L.resolved}</b><span>scored so far</span></div>
+    <div><b>${L.hit_rate == null ? "–" : pct(L.hit_rate)}</b><span>live direction hit rate</span></div></div>
+    <p class="hint" style="margin:0">Every forecast is written down the first time it's made, then scored when the outcome is published. Revisions aren't allowed. Market forecasts resolve when the Fed/BLS data for their target month lands; part lead-time projections after 13 weeks. This live record is the validation milestone.</p>`;
+  $("#outlook-notes").textContent = Object.values(o.notes || {}).join(" ");
+}
+
+async function drawOutlook() {
+  const o = DATA.outlook;
+  if (!o) return;
+  const hist = DATA.series.ppi_semis.slice(-36);
+  const f3 = o.forecasts.ppi_3m, f6 = o.forecasts.ppi_6m;
+  if (hist.length && f3) {
+    const baseIdx = hist.findIndex((h) => h[0] === f3.base_period);
+    const keep = baseIdx >= 0 ? hist.slice(0, baseIdx + 1) : hist;
+    const base = keep[keep.length - 1][1];
+    const lvl = (x) => (x == null ? null : base * Math.exp(x / 100));
+    const labels = keep.map((h) => h[0]).concat([f3.target_period, f6 ? f6.target_period : null].filter(Boolean));
+    const pad = (arr) => Array(keep.length - 1).fill(null).concat(arr);
+    const tail = (k) => [base, lvl(f3[k])].concat(f6 ? [lvl(f6[k])] : []);
+    charts.fan?.destroy();
+    charts.fan = new Chart($("#c-fan"), {
+      type: "line",
+      data: { labels, datasets: [
+        { label: "PPI", data: keep.map((h) => h[1]), borderColor: css("--accent"), pointRadius: 0, borderWidth: 2 },
+        { label: "80% low", data: pad(tail("lo")), borderColor: "transparent", pointRadius: 0, fill: false },
+        { label: "80% high", data: pad(tail("hi")), borderColor: "transparent", pointRadius: 0, fill: "-1", backgroundColor: "rgba(180,83,9,.18)" },
+        { label: "Forecast", data: pad(tail("point")), borderColor: css("--risk-mid"), borderDash: [6, 4], pointRadius: 3, borderWidth: 2 },
+      ] },
+      options: { animation: false, interaction: { intersect: false, mode: "index" },
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { maxTicksLimit: 8, color: css("--muted") }, grid: { display: false } }, y: { ticks: { color: css("--muted") }, grid: { color: css("--line") } } } },
+    });
+  }
+  if (!FC) { try { FC = await (await fetch("data/forecasts.json", { cache: "no-store" })).json(); } catch { return; } }
+  $("#tr-pick").innerHTML = Object.entries(FC.forecasts).map(([k, f]) =>
+    `<button data-k="${k}" class="${k === trTarget ? "on" : ""}">${esc(o.forecasts[k]?.short || f.label)}</button>`).join("");
+  $$("#tr-pick button").forEach((b) => b.addEventListener("click", () => { trTarget = b.dataset.k; drawOutlook(); }));
+  const h = FC.forecasts[trTarget].history;
+  $("#tr-label").textContent = `· ${FC.forecasts[trTarget].label}`;
+  charts.track?.destroy();
+  charts.track = new Chart($("#c-track"), {
+    data: { labels: h.map((r) => r.period), datasets: [
+      { type: "line", label: "Model P(up)", data: h.map((r) => r.p_model * 100), borderColor: css("--accent"), pointRadius: 0, borderWidth: 2, yAxisID: "y" },
+      { type: "line", label: "Trend-following P(up)", data: h.map((r) => r.p_trend * 100), borderColor: css("--muted"), borderDash: [4, 3], pointRadius: 0, borderWidth: 1.5, yAxisID: "y" },
+      { type: "bar", label: `Actual change (${FC.forecasts[trTarget].unit})`, data: h.map((r) => r.y), backgroundColor: h.map((r) => (r.y > 0 ? css("--pos") : css("--neg"))), yAxisID: "y1" },
+    ] },
+    options: { animation: false, interaction: { intersect: false, mode: "index" }, plugins: { legend: { labels: { color: css("--ink"), boxWidth: 12 } } },
+      scales: { x: { ticks: { maxTicksLimit: 9, color: css("--muted") }, grid: { display: false } },
+        y: { min: 0, max: 100, position: "left", ticks: { color: css("--muted"), callback: (v) => v + "%" }, grid: { color: css("--line") } },
+        y1: { position: "right", ticks: { color: css("--muted") }, grid: { display: false } } } },
+  });
+}
+
 // ---------- settings -------------------------------------------------------------
 $("#settings-btn").addEventListener("click", () => {
   $("#set-api").value = store.get("substrate.api") || window.SUBSTRATE_API || "";
@@ -395,6 +496,7 @@ $("#set-save").addEventListener("click", () => {
   renderBriefing(0);
   renderArchive();
   renderMarket();
+  renderOutlook();
   renderBom();
   renderChips();
   const params = new URLSearchParams(location.search);

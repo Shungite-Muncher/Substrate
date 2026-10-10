@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 
-from . import backtest, briefing, config, db, export, parts, scoring, scrapers
+from . import backtest, briefing, config, db, export, parts, predict, scoring, scrapers
 from . import bom as bom_mod
 
 log = logging.getLogger("substrate")
@@ -41,8 +41,9 @@ def cmd_run(a) -> None:
         log.info("parts %s", pr)
         report = backtest.run(con)
         results = scoring.run(con, backtest.load_calibration())
-        b = briefing.write(con, results, use_llm=not a.no_llm)
-        ex = export.run(con, results, report)
+        outlook = predict.run(con, results)
+        b = briefing.write(con, results, use_llm=not a.no_llm, outlook=outlook)
+        ex = export.run(con, results, report, outlook)
         db.dump_warehouse(con)
     print(json.dumps({"scraped": scraped, "parts": pr, "briefing": b["headline"], "model": b["model"],
                       "export": ex, "market": {k: results["market"][k] for k in ("supply_risk", "price_trend", "confidence")}},
@@ -81,6 +82,23 @@ def cmd_part(a) -> None:
         print(f"  {s['component']:6} {s['norm']:+.2f} x{s['weight']:.2f}  {s['name']}: {s['evidence']}")
 
 
+def cmd_forecast(a) -> None:
+    with db.open_db() as con:
+        results = scoring.run(con, backtest.load_calibration())
+        o = predict.run(con, results)
+        db.dump_warehouse(con)
+    for f in o.get("forecasts", {}).values():
+        m = f["metrics"]
+        rng = "" if f["lo"] is None else f" [80%: {f['lo']:+.1f} to {f['hi']:+.1f}]"
+        print(f"{f['label']:34} P({f['up']}) {f['prob_up']:.0%}  expected {f['point']:+.2f}{f['unit']}{rng}  "
+              f"<{f['basis']}; verdict {m.get('verdict')}, skill vs trend {m.get('skill_vs_trend')}>")
+    for mpn, p in o.get("parts", {}).items():
+        lp = p["lead_projection"]
+        lead = f"  lead {lp['now_weeks']}->{lp['in_13w_weeks']} wk" if lp else ""
+        print(f"  {mpn:24} {p['action']:26} P(price up) {p['p_price_up']:.0%}{lead}")
+    print("ledger:", {k: v for k, v in o.get("ledger", {}).items() if k != "recent"})
+
+
 def cmd_backtest(a) -> None:
     with db.open_db() as con:
         r = backtest.run(con)
@@ -90,8 +108,9 @@ def cmd_backtest(a) -> None:
 def cmd_brief(a) -> None:
     with db.open_db() as con:
         results = scoring.run(con, backtest.load_calibration())
-        b = briefing.write(con, results, use_llm=not a.no_llm)
-        export.run(con, results)
+        outlook = predict.run(con, results)
+        b = briefing.write(con, results, use_llm=not a.no_llm, outlook=outlook)
+        export.run(con, results, outlook=outlook)
         db.dump_warehouse(con)
     print(b["body_md"])
 
@@ -140,6 +159,7 @@ def main(argv=None) -> None:
     pt.set_defaults(fn=cmd_part)
 
     sub.add_parser("backtest").set_defaults(fn=cmd_backtest)
+    sub.add_parser("forecast", help="run the predictive layer and print forecasts + buy timing").set_defaults(fn=cmd_forecast)
 
     br = sub.add_parser("brief", help="score and write a briefing from existing data")
     br.add_argument("--no-llm", action="store_true")

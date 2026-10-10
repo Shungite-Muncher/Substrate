@@ -28,6 +28,7 @@ async function run(mpn) {
       </div>
       <b style="font-size:12px">Top drivers</b>
       <ul>${(p.signals || []).slice(0, 3).map((x) => `<li>${esc(x.evidence)}</li>`).join("")}</ul>
+      ${p.outlook ? `<div style="margin-top:.6rem;font-size:12px"><b>3-mo outlook:</b> ${esc(p.outlook.action)}<br><span class="muted">${esc(p.outlook.why)}</span></div>` : ""}
       <a class="open" href="${esc(site)}/?part=${encodeURIComponent(mpn)}" target="_blank">Open full analysis &amp; negotiation brief →</a>
     </div>`;
   } catch (e) {

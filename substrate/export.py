@@ -31,7 +31,7 @@ def _part_view(p: dict) -> dict:
     }
 
 
-def run(con, results: dict, backtest_report: dict | None = None) -> dict:
+def run(con, results: dict, backtest_report: dict | None = None, outlook: dict | None = None) -> dict:
     briefs = db.rows(con, "SELECT id, created_at, edition, headline, body_md, model FROM briefings "
                           "ORDER BY created_at DESC LIMIT 14")
     news = db.rows(con, "SELECT title, url, source, published, segments, supply_tone, price_tone FROM documents "
@@ -44,6 +44,9 @@ def run(con, results: dict, backtest_report: dict | None = None) -> dict:
     inventory = {t: {"name": COMPANY_NAMES.get(t, t), "days": [(q, round(v, 1)) for q, v in signals.inventory_days(con, t)][-12:]}
                  for t in tickers}
     part_views = {k: _part_view(v) for k, v in results["parts"].items()}
+    o = outlook if outlook and outlook.get("status") == "ok" else None
+    for k, v in part_views.items():
+        v["outlook"] = (o or {}).get("parts", {}).get(k)
     latest = {
         "as_of": results["as_of"], "generated": db.now_iso(), "customer": config.CUSTOMER_NAME,
         "peers": config.CUSTOMER_PEERS,
@@ -63,12 +66,22 @@ def run(con, results: dict, backtest_report: dict | None = None) -> dict:
         "octopart_usage": db.usage(con, "octopart"),
         "model": {"baseline_lead_days": signals.BASELINE_LEAD_DAYS},
         "backtest": {k: v for k, v in (backtest_report or {}).items() if k != "series"} or None,
+        "outlook": None if not o else {
+            "generated": o["generated"],
+            "forecasts": {k: {kk: vv for kk, vv in f.items() if kk != "history"} for k, f in o["forecasts"].items()},
+            "segments": o.get("segments"), "notes": o.get("notes"),
+            "ledger": {k: v for k, v in o["ledger"].items() if k != "recent"},
+        },
     }
     _w("latest.json", latest)
     _w("parts.json", {k: {kk: vv for kk, vv in v.items() if kk not in ("history", "components")}
                       for k, v in part_views.items()})
     if backtest_report:
         _w("backtest.json", backtest_report)
+    if o:  # walk-forward track record + live ledger, loaded lazily by the Outlook tab
+        _w("forecasts.json", {"forecasts": {k: {"label": f["label"], "unit": f["unit"], "history": f["history"]}
+                                            for k, f in o["forecasts"].items()},
+                              "ledger": o["ledger"]["recent"]})
     # Compact context for the chat worker (keeps prompts small on the free tier).
     ctx = {
         "as_of": results["as_of"], "customer": config.CUSTOMER_NAME,
@@ -85,6 +98,18 @@ def run(con, results: dict, backtest_report: dict | None = None) -> dict:
         "peer_inventory_days": {t: v for t, v in inventory.items() if t in config.CUSTOMER_PEERS},
         "latest_briefing": briefs[0]["body_md"] if briefs else None,
         "headlines": [{"title": n["title"], "source": n["source"], "url": n["url"]} for n in news[:12]],
+        "outlook": None if not o else {
+            "forecasts": [{"what": f["label"], "p_up": f["prob_up"], "up_means": f["up"], "expected": f["point"],
+                           "unit": f["unit"], "range80": [f["lo"], f["hi"]], "basis": f["basis"],
+                           "tested_verdict": f["metrics"].get("verdict"),
+                           "oos_hit_rate": f["metrics"].get("hit_rate_model"),
+                           "oos_skill_vs_trend": f["metrics"].get("skill_vs_trend")} for f in o["forecasts"].values()],
+            "segments": {k: {kk: v[kk] for kk in ("p_supply_tighter", "p_price_up", "supply_call", "price_call")}
+                         for k, v in (o.get("segments") or {}).items()},
+            "parts": {k: {"action": v["action"], "why": v["why"], "p_price_up": v["p_price_up"],
+                          "lead_projection": v["lead_projection"]} for k, v in (o.get("parts") or {}).items()},
+            "caveat": "Segment/part probabilities tilt the tested market forecast; lead projections are heuristic until scored.",
+        },
     }
     _w("context.json", ctx)
     return {"parts": len(part_views), "briefings": len(briefs), "news": len(news)}

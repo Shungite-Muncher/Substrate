@@ -3,7 +3,7 @@ name = "substrate"
 version = "0.1.0"
 description = "Market intelligence for semiconductor procurement"
 requires-python = ">=3.11"
-dependencies = ["requests>=2.31", "beautifulsoup4>=4.12"]
+dependencies = ["requests>=2.31", "beautifulsoup4>=4.12", "numpy>=1.26"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

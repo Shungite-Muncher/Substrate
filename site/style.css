@@ -149,3 +149,19 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
   .scenario label { grid-template-columns: 1fr; gap: .2rem; }
   .inline-form, .chat-form { flex-direction: column; }
 }
+
+.forecasts { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
+.fc .p { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.fc .p small { font-size: .85rem; font-weight: 500; }
+.fc .exp { margin: .3rem 0 .5rem; font-variant-numeric: tabular-nums; }
+.fc .stats { font-size: .78rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: .5rem; margin-top: .5rem; }
+.fc details { font-size: .8rem; margin-top: .4rem; } .fc summary { cursor: pointer; color: var(--accent); }
+.fc .drv { display: grid; grid-template-columns: 1fr 90px; gap: .2rem .5rem; margin-top: .4rem; align-items: center; }
+.tag { display: inline-block; font-size: .72rem; font-weight: 600; padding: .1rem .5rem; border-radius: 999px; }
+.tag.edge { background: var(--accent-soft); color: var(--accent); }
+.tag.base { background: var(--bg); color: var(--muted); border: 1px solid var(--line); }
+.act { display: inline-block; font-size: .78rem; font-weight: 600; padding: .15rem .55rem; border-radius: 6px; white-space: nowrap; color: #fff; }
+.chips button.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.ledger-stats { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: .6rem; }
+.ledger-stats b { display: block; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.ledger-stats span { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }

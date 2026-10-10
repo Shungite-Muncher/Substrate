@@ -20,6 +20,7 @@
   <nav id="tabs" role="tablist">
     <button data-tab="briefing" class="active">Briefing</button>
     <button data-tab="market">Market</button>
+    <button data-tab="outlook">Outlook</button>
     <button data-tab="bom">BOM watchlist</button>
     <button data-tab="lookup">Part lookup</button>
     <button data-tab="chat">Negotiation chat</button>
@@ -55,6 +56,29 @@
       <div class="card"><h3>Fab capacity utilization <small>Fed G.17, %</small></h3><canvas id="c-cu"></canvas></div>
       <div class="card"><h3>Semiconductor PPI <small>BLS index</small></h3><canvas id="c-ppi"></canvas></div>
     </div>
+  </section>
+
+  <section id="tab-outlook" class="tab">
+    <div class="row-between">
+      <div>
+        <h2 class="section" style="margin-top:0">Outlook <small id="outlook-asof"></small></h2>
+        <p class="hint">Where prices and supply go next. Each forecast is re-tested every run against what a buyer gets for free: "the recent trend continues" and "the long-run average". It only counts as an edge if it beats both out of sample.</p>
+      </div>
+    </div>
+    <div class="forecasts" id="forecast-cards"></div>
+    <div class="charts">
+      <div class="card"><h3>Chip price index: history and forecast <small>BLS PPI, 80% range</small></h3><canvas id="c-fan"></canvas></div>
+      <div class="card"><h3>Track record <small id="tr-label"></small></h3>
+        <div class="chips" id="tr-pick" style="margin:0 0 .6rem"></div><canvas id="c-track"></canvas>
+        <p class="hint" style="margin:.4rem 0 0">Line: forecast probability of a rise, made with only the data public at the time. Bars: what actually happened.</p></div>
+    </div>
+    <h2 class="section">Buy timing for your BOM</h2>
+    <div class="card table-wrap"><table class="sig-table" id="timing-table"></table></div>
+    <h2 class="section">Segment outlook</h2>
+    <div class="card table-wrap"><table class="sig-table" id="seg-outlook"></table></div>
+    <h2 class="section">Live forecast ledger</h2>
+    <div class="card" id="ledger"></div>
+    <p class="hint" id="outlook-notes"></p>
   </section>
 
   <section id="tab-bom" class="tab">

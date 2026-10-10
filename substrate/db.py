@@ -37,6 +37,10 @@ SCHEMA = {
         created_at TEXT, mpn TEXT, action TEXT, rationale TEXT, snapshot TEXT, PRIMARY KEY (created_at, mpn)""",
     "api_usage": """
         provider TEXT, month TEXT, calls INTEGER, parts INTEGER, PRIMARY KEY (provider, month)""",
+    "forecasts": """
+        target TEXT, base_period TEXT, target_period TEXT, horizon INTEGER, made_at TEXT, prob_up REAL,
+        point REAL, lo REAL, hi REAL, basis TEXT, base_value REAL, realized REAL, hit INTEGER,
+        in_range INTEGER, resolved_at TEXT, PRIMARY KEY (target, base_period)""",
 }
 
 PKS = {
@@ -48,6 +52,7 @@ PKS = {
     "briefings": ("id",),
     "decisions": ("created_at", "mpn"),
     "api_usage": ("provider", "month"),
+    "forecasts": ("target", "base_period"),
 }
 
 # Documents older than this are dropped from the warehouse (they no longer move scores).

@@ -48,7 +48,7 @@ def _pct(s: str) -> float | None:
 def run(con, backfill: bool = False) -> dict:
     today = date.today()
     if backfill:
-        years = range(today.year - 12, today.year + 1)
+        years = range(1999, today.year + 1)  # full history feeds the forecast models
     else:  # early in the year the December figure still lands on last year's page
         years = [today.year - 1, today.year] if today.month <= 2 else [today.year]
     n = 0

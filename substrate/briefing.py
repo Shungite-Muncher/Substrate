@@ -20,7 +20,7 @@ Rules:
 - Cite sources inline as [n] using the numbered source list.
 - Scores run 0-100 with 50 neutral. Supply risk: higher = tighter supply. Price trend: higher = rising prices.
 - Speak to a buyer: what it means for their negotiations this week.
-- Output GitHub-flavored Markdown, 220-380 words."""
+- Output GitHub-flavored Markdown, 250-420 words."""
 
 FORMAT = """Structure exactly:
 # <headline, max 12 words>
@@ -35,6 +35,11 @@ FORMAT = """Structure exactly:
 ## Your BOM watchlist
 - the 3-5 highest-risk parts with the driver behind each.
 
+## Outlook
+- 2-4 bullets from the "outlook" context: probability prices rise and supply tightens over 3/6 months, the
+  80% range, whether each forecast has a tested edge or is the trend-following baseline, and the buy-timing calls.
+  State probabilities as percentages and never present a baseline as a model edge.
+
 ## Negotiation angle
 - 2-3 concrete, actionable points for this week's supplier conversations."""
 
@@ -44,7 +49,7 @@ def edition_for(now: datetime | None = None) -> str:
     return "Asia open" if h >= 20 or h < 6 else "U.S. open"
 
 
-def build_context(con, results: dict) -> dict:
+def build_context(con, results: dict, outlook: dict | None = None) -> dict:
     as_of = results["as_of"]
     prev = scoring.previous(con, as_of)
     sources: list[dict] = []
@@ -92,7 +97,24 @@ def build_context(con, results: dict) -> dict:
     headlines = [{"title": n["title"], "outlet": n["source"], "supply_tone": n["supply_tone"],
                   "price_tone": n["price_tone"], "source": cite(f"{n['source']}: {n['title']}", n["url"])} for n in news]
     return {"as_of": as_of, "edition": edition_for(), "customer": config.CUSTOMER_NAME, "market": market,
-            "segments": segs, "bom_watchlist": watch, "new_headlines": headlines, "sources": sources}
+            "segments": segs, "bom_watchlist": watch, "new_headlines": headlines,
+            "outlook": outlook_context(outlook), "sources": sources}
+
+
+def outlook_context(outlook: dict | None) -> dict | None:
+    """Compact forecast summary for the reporter (keeps the LLM prompt small)."""
+    if not outlook or not outlook.get("forecasts"):
+        return None
+    fc = []
+    for f in outlook["forecasts"].values():
+        fc.append({"what": f["label"], "p_up": f["prob_up"], "up_means": f["up"], "expected": f["point"],
+                   "unit": f["unit"], "range80": [f["lo"], f["hi"]], "basis": f["basis"],
+                   "tested_edge": f["metrics"].get("verdict") == "edge",
+                   "base_period": f["base_period"]})
+    calls = {}
+    for mpn, p in (outlook.get("parts") or {}).items():
+        calls.setdefault(p["action"], []).append(mpn)
+    return {"forecasts": fc, "buy_timing": calls}
 
 
 def template_briefing(ctx: dict) -> str:
@@ -119,6 +141,17 @@ def template_briefing(ctx: dict) -> str:
     for w in ctx["bom_watchlist"]:
         lt = f", {w['lead_weeks']:.0f} wk lead" if w["lead_weeks"] else ""
         lines.append(f"- **{w['mpn']}** ({w['segment'] or 'unclassified'}): supply risk {w['supply_risk']:.0f}{lt}. {w['driver']}")
+    o = ctx.get("outlook")
+    if o:
+        lines += ["", "## Outlook"]
+        for f in o["forecasts"]:
+            if not f["what"].endswith("3 months"):
+                continue
+            rng = "" if f["range80"][0] is None else f", 80% range {f['range80'][0]:+.1f} to {f['range80'][1]:+.1f}{f['unit']}"
+            basis = "tested model" if f["tested_edge"] else "trend-following baseline (no tested edge yet)"
+            lines.append(f"- {f['what']}: {f['p_up']:.0%} chance {f['up_means']}; expected {f['expected']:+.1f}{f['unit']}{rng} ({basis}).")
+        for action, mpns in o["buy_timing"].items():
+            lines.append(f"- **{action}:** {', '.join(mpns[:6])}{' and others' if len(mpns) > 6 else ''}")
     lines += ["", "## Negotiation angle"]
     if m["supply_risk"] >= 54:
         lines.append("- Supply is tightening: prioritize allocation commitments and lead-time guarantees over unit price.")
@@ -142,8 +175,8 @@ def sources_md(ctx: dict) -> str:
                      for i, s in enumerate(ctx["sources"], 1))
 
 
-def write(con, results: dict, use_llm: bool = True) -> dict:
-    ctx = build_context(con, results)
+def write(con, results: dict, use_llm: bool = True, outlook: dict | None = None) -> dict:
+    ctx = build_context(con, results, outlook)
     body, model = None, "template"
     if use_llm and llm.available():
         prompt = (f"{FORMAT}\n\nEdition: {ctx['edition']} briefing for {ctx['customer']}.\n"

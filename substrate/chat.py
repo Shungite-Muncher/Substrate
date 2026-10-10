@@ -86,6 +86,11 @@ def fallback_answer(ctx: dict, question: str) -> str:
     if p.get("target_price") and p.get("price_1k"):
         gap = (p["price_1k"] / p["target_price"] - 1) * 100
         lines.append(f"- Market 1k price ${p['price_1k']:.3f} vs your target ${p['target_price']:.3f} ({gap:+.0f}%)")
+    po = ((ctx.get("outlook") or {}).get("parts") or {}).get(p["mpn"])
+    if po:
+        lp = po.get("lead_projection")
+        lines += ["", f"**Timing (3-month outlook).** {po['action']}: {po['why']}."
+                  + (f" Lead time projected {lp['now_weeks']:.0f} -> {lp['in_13w_weeks']:.0f} weeks." if lp else "")]
     lines += ["", "**Walk-away.** Qualify a second source or pin-compatible alternate before the next review.",
               "", "_Template mode: set GROQ_API_KEY for conversational answers._"]
     return "\n".join(lines)
