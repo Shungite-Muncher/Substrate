@@ -168,3 +168,17 @@ def test_schema_migration_adds_new_columns(tmp_path):
     con = db.connect(path)
     cols = {r[1] for r in con.execute("PRAGMA table_info(part_snapshots)")}
     assert {"on_order", "on_order_eta", "price_1", "lead_days"} <= cols
+
+
+def test_sia_falls_back_when_api_is_blocked(tmp_path, monkeypatch):
+    from substrate import config
+    monkeypatch.setattr(config, "WAREHOUSE_DIR", tmp_path / "wh")
+    con = db.connect(tmp_path / "s.db")
+    def blocked(*a, **k):
+        raise RuntimeError("403 Forbidden")
+    monkeypatch.setattr(sia, "_from_api", blocked)
+    monkeypatch.setattr(sia, "_from_feed", lambda: [("https://x/aug", "Global semiconductor sales were $159.7 billion "
+                        "during the month of August 2026, an increase of 8% compared to the July 2026 total of $147.9 billion.")])
+    r = sia.run(con)
+    assert r["via"] == "rss" and r["errors"] and r["rows"] == 2
+    assert con.execute("SELECT value FROM observations WHERE period='2026-08'").fetchone()[0] == 159.7

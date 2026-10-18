@@ -51,40 +51,90 @@ def parse_release(text: str) -> dict | None:
     return {"period": f"{m.group(3)}-{month:02d}", "points": points, "regions_yoy_pct": regions}
 
 
-def run(con, backfill: bool = False) -> dict:
-    known = {r["url"] for r in db.rows(con, "SELECT DISTINCT url FROM observations WHERE source='sia'")}
+WP_API = "https://www.semiconductors.org/wp-json/wp/v2/posts"
+FEED = "https://www.semiconductors.org/feed/"
+
+
+def _text(html: str) -> str:
+    return BeautifulSoup(html or "", "html.parser").get_text(" ", strip=True)
+
+
+def _from_api(backfill: bool) -> list[tuple[str, str]]:
+    """WordPress REST API: full release text as JSON, no per-page fetches. Primary source."""
+    out = []
+    for page in range(1, 26 if backfill else 2):
+        r = http.get(WP_API, params={"search": "semiconductor sales", "per_page": 50 if backfill else 20, "page": page,
+                                     "_fields": "date,link,title,content"})
+        posts = r.json()
+        out += [(p["link"], _text(p["content"]["rendered"])) for p in posts]
+        if page >= int(r.headers.get("X-WP-TotalPages", 1)):
+            break
+    return out
+
+
+def _from_feed() -> list[tuple[str, str]]:
+    """RSS with full content:encoded bodies. First fallback."""
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(http.get(FEED).content)
+    ns = {"content": "http://purl.org/rss/1.0/modules/content/"}
+    return [((it.findtext("link") or "").strip(),
+             _text(it.findtext("content:encoded", default="", namespaces=ns) or it.findtext("description") or ""))
+            for it in root.iter("item")]
+
+
+def _from_html(backfill: bool, known: set) -> list[tuple[str, str]]:
+    """Scrape the news listing and each release page. Last resort (blocked from some cloud IPs)."""
     links: list[str] = []
-    pages = range(1, 6) if backfill else range(1, 2)
-    for n in pages:
+    for n in (range(1, 6) if backfill else range(1, 2)):
         url = LIST_URLS[0] if n == 1 else LIST_URLS[1].format(n=n)
         try:
             links += [l for l in release_links(http.get(url).text) if l not in links]
         except Exception as e:
             log.info("sia list page %s: %s", n, e)
             break
-    new = [l for l in links if l not in known]
-    rows = 0
-    # oldest first so newer releases' revisions win on upsert
-    for url in reversed(new):
+    out = []
+    for url in links:
+        if url in known:
+            continue
+        soup = BeautifulSoup(http.get(url).text, "html.parser")
+        out.append((url, (soup.find("article") or soup.find("main") or soup).get_text(" ", strip=True)))
+    return out
+
+
+def run(con, backfill: bool = False) -> dict:
+    known = {r["url"] for r in db.rows(con, "SELECT DISTINCT url FROM observations WHERE source='sia'")}
+    releases, used, errors = [], None, []
+    for name, fetch in (("wp-api", lambda: _from_api(backfill)), ("rss", _from_feed),
+                        ("html", lambda: _from_html(backfill, known))):
         try:
-            soup = BeautifulSoup(http.get(url).text, "html.parser")
+            releases = fetch()
         except Exception as e:
-            log.warning("sia release %s: %s", url, e)
+            errors.append(f"{name}: {e}")
+            log.info("sia %s failed: %s", name, e)
             continue
-        body = soup.find("article") or soup.find("main") or soup
-        parsed = parse_release(body.get_text(" ", strip=True))
-        if not parsed:
-            continue
-        for period, value in parsed["points"].items():
-            is_headline = period == parsed["period"]
-            existing = con.execute("SELECT url FROM observations WHERE source='sia' AND series='global_sales_3mma' "
+        if any(parse_release(t) for _, t in releases):
+            used = name
+            break
+    parsed = [(url, parse_release(text)) for url, text in releases]
+    parsed = [(u, p) for u, p in parsed if p]
+    # oldest headline month first, so newer releases' revisions win on upsert
+    parsed.sort(key=lambda x: x[1]["period"])
+    rows = new = 0
+    for url, rel in parsed:
+        new += url not in known
+        for period, value in rel["points"].items():
+            is_headline = period == rel["period"]
+            existing = con.execute("SELECT meta FROM observations WHERE source='sia' AND series='global_sales_3mma' "
                                    "AND period=?", (period,)).fetchone()
             # comparison figures never overwrite a month's own headline release
-            if not is_headline and existing:
+            if not is_headline and existing and "from_release" not in (existing["meta"] or ""):
                 continue
             db.upsert(con, "observations", {
                 "source": "sia", "series": "global_sales_3mma", "period": period, "value": value,
                 "unit": "US$ billion", "url": url, "fetched_at": db.now_iso(),
-                "meta": {"regions_yoy_pct": parsed["regions_yoy_pct"]} if is_headline else {"from_release": parsed["period"]}})
+                "meta": {"regions_yoy_pct": rel["regions_yoy_pct"]} if is_headline else {"from_release": rel["period"]}})
             rows += 1
-    return {"source": "sia", "releases": len(new), "rows": rows}
+    if not used:
+        log.warning("sia: every source failed (%s); keeping last stored data", "; ".join(errors))
+    return {"source": "sia", "via": used, "releases": len(parsed), "new": new, "rows": rows,
+            **({"errors": errors} if errors else {})}
