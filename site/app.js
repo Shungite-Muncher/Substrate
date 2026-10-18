@@ -126,7 +126,7 @@ function renderBom(parts = DATA.parts) {
   $("#bom-customer").textContent = `· ${DATA.customer}`;
   const cols = [
     ["mpn", "Part"], ["segment", "Segment"], ["supply_risk", "Supply risk"], ["price_trend", "Price trend"],
-    ["confidence", "Conf."], ["lead_days", "Lead (wk)"], ["total_avail", "Stock"], ["price_1k", "1k price"], ["price_vs_target_pct", "vs target"],
+    ["confidence", "Conf."], ["lead_days", "Lead (wk)"], ["total_avail", "Stock"], ["on_order", "PBO"], ["price_1k", "1k price"], ["price_vs_target_pct", "vs target"],
   ];
   const sorted = [...parts].sort((a, b) => ((a[bomSort.key] ?? -1e9) > (b[bomSort.key] ?? -1e9) ? 1 : -1) * bomSort.dir);
   $("#bom-table").innerHTML = `<thead><tr>${cols.map(([k, l]) => `<th data-k="${k}">${l}${bomSort.key === k ? (bomSort.dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr></thead><tbody>` +
@@ -135,6 +135,7 @@ function renderBom(parts = DATA.parts) {
       <td>${esc(p.segment || "–")}</td><td>${badge(p.supply_risk)} <small>${esc(p.labels.supply)}</small></td>
       <td>${badge(p.price_trend)} <small>${esc(p.labels.price)}</small></td><td class="num">${fmt(p.confidence)}</td>
       <td class="num">${p.lead_days ? fmt(p.lead_days / 7) : "–"}</td><td class="num">${fmt(p.total_avail)}</td>
+      <td class="num">${fmt(p.on_order)}</td>
       <td class="num">${p.price_1k ? "$" + fmt(p.price_1k, 3) : "–"}</td>
       <td class="num" style="color:${(p.price_vs_target_pct || 0) > 0 ? css("--pos") : css("--neg")}">${p.price_vs_target_pct != null ? (p.price_vs_target_pct > 0 ? "+" : "") + fmt(p.price_vs_target_pct, 1) + "%" : "–"}</td></tr>`).join("") + "</tbody>";
   $$("#bom-table th").forEach((th) => th.addEventListener("click", () => {
@@ -167,6 +168,7 @@ function scenarioScore(p, leadWeeks, stock) {
 
 function renderPartDetail(p, host) {
   host.hidden = false;
+  const noData = p.provider ? "not reported" : "waiting on a part-data key";
   const lw = p.lead_days ? Math.round(p.lead_days / 7) : 12;
   const st = p.total_avail ?? (p.annual_qty ? Math.round(p.annual_qty / 52 * 8) : 10000);
   const stMax = Math.max(st * 4, p.annual_qty ? p.annual_qty / 2 : 50000);
@@ -174,6 +176,11 @@ function renderPartDetail(p, host) {
       <div class="hint" style="margin:0">${esc(p.manufacturer || "")} · ${esc(p.description || "")} · ${esc(p.segment_label || p.segment || "unclassified")}</div></div>
       <div style="display:flex;gap:.5rem">${p.url ? `<a class="btn secondary" href="${esc(p.url)}" target="_blank" rel="noopener">Source listing</a>` : ""}
       <button class="btn" data-brief>Draft negotiation brief</button></div></div>
+    <div class="facts">
+      <div><span>Lead time</span><b>${p.lead_days ? fmt(p.lead_days / 7) + " wk" : "–"}</b><small>${p.lead_days ? fmt(p.lead_days) + " days, factory" : noData}</small></div>
+      <div><span>PBO (on order / backorder)</span><b>${p.on_order != null ? fmt(p.on_order) : "–"}</b><small>${p.on_order_eta ? "next arrival " + esc(p.on_order_eta) : p.provider ? "none reported" : noData}</small></div>
+      <div><span>Current price</span><b>${p.price_1 ? "$" + fmt(p.price_1, 3) : p.price_1k ? "$" + fmt(p.price_1k, 3) : "–"}</b><small>${p.price_1 && p.price_1k ? "qty 1 · $" + fmt(p.price_1k, 3) + " at 1k" : p.price_1k ? "at 1k qty" : noData}</small></div>
+    </div>
     <div class="kv">
       <div><span>Supply risk</span><b style="color:${riskColor(p.supply_risk)}">${fmt(p.supply_risk)} · ${esc(p.labels.supply)}</b></div>
       <div><span>Price trend</span><b style="color:${riskColor(p.price_trend)}">${fmt(p.price_trend)} · ${esc(p.labels.price)}</b></div>
@@ -194,8 +201,8 @@ function renderPartDetail(p, host) {
       <div>Scenario supply risk: <span class="out" data-out></span> <small data-delta></small></div>
     </div>
     ${signalTable(p.signals)}
-    ${(p.sellers || []).length ? `<h3 style="margin-top:1rem">Authorized sellers</h3><div class="table-wrap" style="padding:0"><table class="sig-table"><thead><tr><th>Seller</th><th class="num">Stock</th><th class="num">Lead (wk)</th><th class="num">MOQ</th><th class="num">1k price</th></tr></thead><tbody>` +
-      p.sellers.map((s) => `<tr><td>${esc(s.seller)}</td><td class="num">${fmt(s.stock)}</td><td class="num">${s.lead_days ? fmt(s.lead_days / 7) : "–"}</td><td class="num">${fmt(s.moq)}</td><td class="num">${s.price_1k ? "$" + fmt(s.price_1k, 3) : "–"}</td></tr>`).join("") + "</tbody></table></div>" : ""}`;
+    ${(p.sellers || []).length ? `<h3 style="margin-top:1rem">Authorized sellers</h3><div class="table-wrap" style="padding:0"><table class="sig-table"><thead><tr><th>Seller</th><th class="num">Stock</th><th class="num">Lead (wk)</th><th class="num">PBO</th><th class="num">MOQ</th><th class="num">1k price</th></tr></thead><tbody>` +
+      p.sellers.map((s) => `<tr><td>${esc(s.seller)}</td><td class="num">${fmt(s.stock)}</td><td class="num">${s.lead_days ? fmt(s.lead_days / 7) : "–"}</td><td class="num">${fmt(s.on_order)}${s.on_order_eta ? ` <small>${esc(s.on_order_eta)}</small>` : ""}</td><td class="num">${fmt(s.moq)}</td><td class="num">${s.price_1k ? "$" + fmt(s.price_1k, 3) : "–"}</td></tr>`).join("") + "</tbody></table></div>" : ""}`;
   const upd = () => {
     const l = +$("[data-lt]", host).value, s = +$("[data-st]", host).value;
     $("[data-ltv]", host).textContent = `${l} wk`;
@@ -264,7 +271,8 @@ $("#lookup-form").addEventListener("submit", async (e) => {
     if (!r.ok) throw new Error(j.error || r.statusText);
     const s = j.snapshot || {};
     const p = { ...j, manufacturer: s.manufacturer, description: s.description, lead_days: s.lead_days, total_avail: s.total_avail,
-      price_1k: s.price_1k, url: s.url, sellers: s.sellers, provider: s.provider, data_day: s.day };
+      price_1k: s.price_1k, price_1: s.price_1, on_order: s.on_order, on_order_eta: s.on_order_eta,
+      url: s.url, sellers: s.sellers, provider: s.provider, data_day: s.day };
     host.innerHTML = `<div class="card"></div>`;
     renderPartDetail(p, host.firstChild);
     if (!j.found) host.firstChild.insertAdjacentHTML("afterbegin", `<p class="hint">No live part data returned. Showing segment-level scores.</p>`);

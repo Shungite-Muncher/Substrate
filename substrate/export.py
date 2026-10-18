@@ -24,6 +24,7 @@ def _part_view(p: dict) -> dict:
         "manufacturer": snap.get("manufacturer") or (p.get("bom") or {}).get("manufacturer"),
         "description": snap.get("description") or (p.get("bom") or {}).get("description"),
         "lead_days": snap.get("lead_days"), "total_avail": snap.get("total_avail"), "price_1k": snap.get("price_1k"),
+        "price_1": snap.get("price_1"), "on_order": snap.get("on_order"), "on_order_eta": snap.get("on_order_eta"),
         "lifecycle": snap.get("lifecycle"), "provider": snap.get("provider"), "data_day": snap.get("day"),
         "url": snap.get("url"), "sellers": (snap.get("sellers") or [])[:8],
         "annual_qty": (p.get("bom") or {}).get("annual_qty"), "target_price": (p.get("bom") or {}).get("target_price"),
@@ -92,7 +93,8 @@ def run(con, results: dict, backtest_report: dict | None = None, outlook: dict |
                      for k, v in results["segments"].items()},
         "bom": [{"mpn": p["mpn"], "segment": p["segment"], "supply_risk": p["supply_risk"],
                  "price_trend": p["price_trend"], "lead_weeks": round(p["lead_days"] / 7, 1) if p["lead_days"] else None,
-                 "stock": p["total_avail"], "price_1k": p["price_1k"], "target_price": p["target_price"],
+                 "stock": p["total_avail"], "price_1k": p["price_1k"], "price_1": p["price_1"],
+                 "on_order_pbo": p["on_order"], "on_order_eta": p["on_order_eta"], "target_price": p["target_price"],
                  "annual_qty": p["annual_qty"], "drivers": [s["evidence"] for s in p["signals"][:3]]}
                 for p in part_views.values()],
         "peer_inventory_days": {t: v for t, v in inventory.items() if t in config.CUSTOMER_PEERS},

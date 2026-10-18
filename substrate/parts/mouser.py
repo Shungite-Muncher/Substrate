@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .. import config, db, http
-from .base import Offer, PartProvider, PartRecord, parse_lead_days, parse_money, price_at
+from .base import Offer, PartProvider, PartRecord, earliest, parse_lead_days, parse_money, price_at
 
 URL = "https://api.mouser.com/api/v1/search/partnumber?apiKey={key}"
 DAILY_LIMIT = 900
@@ -22,13 +22,19 @@ def parse(payload: dict, mpn: str) -> PartRecord | None:
         stock = None
     lead = parse_lead_days(p.get("LeadTime"))
     price = price_at(breaks)
+    # PBO: Mouser lists factory orders in flight as [{"Quantity": n, "Date": "..."}]
+    oo = [x for x in p.get("AvailabilityOnOrder") or [] if isinstance(x, dict)]
+    on_order = sum(int(str(x.get("Quantity") or 0).replace(",", "") or 0) for x in oo) or None
+    on_order_eta = earliest(x.get("Date") for x in oo)
     currency = (p.get("PriceBreaks") or [{}])[0].get("Currency", "USD")
     return PartRecord(
         mpn=p.get("ManufacturerPartNumber") or mpn, provider="mouser",
         manufacturer=p.get("Manufacturer"), description=p.get("Description"), category=p.get("Category"),
-        total_avail=stock, lead_days=lead, price_1k=price, currency=currency,
+        total_avail=stock, lead_days=lead, price_1k=price, price_1=price_at(breaks, 1),
+        on_order=on_order, on_order_eta=on_order_eta, currency=currency,
         lifecycle=p.get("LifecycleStatus"), url=p.get("ProductDetailUrl"),
-        sellers=[Offer(seller="Mouser", stock=stock, lead_days=lead, moq=int(p.get("Min") or 0) or None,
+        sellers=[Offer(seller="Mouser", stock=stock, lead_days=lead, on_order=on_order, on_order_eta=on_order_eta,
+                       moq=int(p.get("Min") or 0) or None,
                        price_1k=price, currency=currency)])
 
 

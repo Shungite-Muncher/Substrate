@@ -24,7 +24,8 @@ SCHEMA = {
     "part_snapshots": """
         mpn TEXT, provider TEXT, day TEXT, manufacturer TEXT, description TEXT, category TEXT,
         total_avail INTEGER, lead_days REAL, price_1k REAL, currency TEXT, lifecycle TEXT,
-        sellers TEXT, url TEXT, PRIMARY KEY (mpn, provider, day)""",
+        sellers TEXT, url TEXT, price_1 REAL, on_order INTEGER, on_order_eta TEXT,
+        PRIMARY KEY (mpn, provider, day)""",
     "bom": """
         customer TEXT, mpn TEXT, manufacturer TEXT, description TEXT, segment TEXT,
         annual_qty REAL, target_price REAL, supplier TEXT, PRIMARY KEY (customer, mpn)""",
@@ -71,9 +72,19 @@ def connect(path=None) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     for name, cols in SCHEMA.items():
         con.execute(f"CREATE TABLE IF NOT EXISTS {name} ({cols})")
+        _add_missing_columns(con, name, cols)
     if fresh:
         load_warehouse(con)
     return con
+
+
+def _add_missing_columns(con, table: str, cols: str) -> None:
+    """Tiny migration: add any column the schema has gained since the DB was created."""
+    have = {r[1] for r in con.execute(f"PRAGMA table_info({table})")}
+    for part in cols.split(","):
+        bits = part.split()
+        if len(bits) >= 2 and bits[0].isidentifier() and bits[0].upper() != "PRIMARY" and bits[0] not in have:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {bits[0]} {bits[1]}")
 
 
 @contextmanager

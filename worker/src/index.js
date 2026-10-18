@@ -25,7 +25,7 @@ const NEXAR_QUERY = `query SubstratePart($q: String!) {
   supSearchMpn(q: $q, limit: 1) { results { part {
     mpn manufacturer { name } shortDescription category { name path } octopartUrl totalAvail
     estimatedFactoryLeadDays medianPrice1000 { price currency }
-    sellers(authorizedOnly: true) { company { name } offers { inventoryLevel factoryLeadDays moq prices { quantity price currency } } }
+    sellers(authorizedOnly: true) { company { name } offers { inventoryLevel factoryLeadDays onOrderQuantity onOrderEta moq prices { quantity price currency } } }
   } } }
 }`;
 
@@ -84,22 +84,31 @@ async function nexarLookup(env, mpn) {
     const j = await r.json();
     nexarToken = { value: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
   }
-  const r = await fetch("https://api.nexar.com/graphql/", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${nexarToken.value}` },
-    body: JSON.stringify({ query: NEXAR_QUERY, variables: { q: mpn } }),
-  });
-  if (!r.ok) throw new Error(`nexar ${r.status}`);
-  const p = (await r.json())?.data?.supSearchMpn?.results?.[0]?.part;
+  const ask = async (query) => {
+    const r = await fetch("https://api.nexar.com/graphql/", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${nexarToken.value}` },
+      body: JSON.stringify({ query, variables: { q: mpn } }),
+    });
+    if (!r.ok) throw new Error(`nexar ${r.status}`);
+    return r.json();
+  };
+  let j = await ask(NEXAR_QUERY);
+  if ((j.errors || []).some((e) => /onOrder/.test(e.message || ""))) j = await ask(NEXAR_QUERY.replace(/onOrderQuantity|onOrderEta/g, ""));
+  const p = j?.data?.supSearchMpn?.results?.[0]?.part;
   if (!p) return null;
   const sellers = [];
   for (const s of p.sellers || []) for (const o of s.offers || []) {
     sellers.push({ seller: s.company.name, stock: o.inventoryLevel, lead_days: o.factoryLeadDays, moq: o.moq,
+      on_order: o.onOrderQuantity, on_order_eta: o.onOrderEta,
       price_1k: priceAt((o.prices || []).filter((x) => !x.currency || x.currency === "USD").map((x) => [x.quantity, x.price])) });
   }
   return { mpn: p.mpn || mpn, provider: "octopart", manufacturer: p.manufacturer?.name, description: p.shortDescription,
     category: p.category?.path || p.category?.name, total_avail: p.totalAvail, lead_days: p.estimatedFactoryLeadDays,
-    price_1k: p.medianPrice1000?.price, url: p.octopartUrl, sellers: sellers.slice(0, 15), day: new Date().toISOString().slice(0, 10) };
+    price_1k: p.medianPrice1000?.price, url: p.octopartUrl, sellers: sellers.slice(0, 15), day: new Date().toISOString().slice(0, 10),
+    price_1: (() => { const ones = (p.sellers || []).flatMap((s) => (s.offers || []).flatMap((o) => (o.prices || []).filter((x) => x.quantity === 1).map((x) => x.price))); return ones.length ? Math.min(...ones) : null; })(),
+    on_order: sellers.reduce((a, s) => a + (s.on_order || 0), 0) || null,
+    on_order_eta: sellers.map((s) => s.on_order_eta).filter(Boolean).sort()[0] || null };
 }
 
 async function mouserLookup(env, mpn) {
@@ -115,9 +124,14 @@ async function mouserLookup(env, mpn) {
   const stock = parseInt(String(p.AvailabilityInStock || "").replace(/,/g, ""), 10);
   const lm = String(p.LeadTime || "").match(/(\d+)\s*(week|day)?/i);
   const lead = lm ? (+lm[1]) * (/week/i.test(lm[2] || "") ? 7 : 1) : null;
-  const price = priceAt((p.PriceBreaks || []).map((b) => [+b.Quantity, money(b.Price)]));
+  const breaks = (p.PriceBreaks || []).map((b) => [+b.Quantity, money(b.Price)]);
+  const price = priceAt(breaks);
+  const oo = (p.AvailabilityOnOrder || []).filter((x) => x && typeof x === "object");
+  const onOrder = oo.reduce((a, x) => a + (parseInt(String(x.Quantity || 0).replace(/,/g, ""), 10) || 0), 0) || null;
+  const onOrderEta = oo.map((x) => String(x.Date || "").slice(0, 10)).filter(Boolean).sort()[0] || null;
   return { mpn: p.ManufacturerPartNumber || mpn, provider: "mouser", manufacturer: p.Manufacturer, description: p.Description,
     category: p.Category, total_avail: isNaN(stock) ? null : stock, lead_days: lead, price_1k: price, lifecycle: p.LifecycleStatus,
+    price_1: priceAt(breaks, 1), on_order: onOrder, on_order_eta: onOrderEta,
     url: p.ProductDetailUrl, sellers: [{ seller: "Mouser", stock: isNaN(stock) ? null : stock, lead_days: lead, price_1k: price }],
     day: new Date().toISOString().slice(0, 10) };
 }

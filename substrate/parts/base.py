@@ -9,6 +9,8 @@ class Offer:
     seller: str
     stock: int | None = None
     lead_days: float | None = None
+    on_order: int | None = None        # PBO: units on order / backorder from the manufacturer
+    on_order_eta: str | None = None
     moq: int | None = None
     price_1k: float | None = None
     currency: str | None = None
@@ -24,6 +26,9 @@ class PartRecord:
     total_avail: int | None = None
     lead_days: float | None = None     # factory lead time
     price_1k: float | None = None      # unit price at ~1k quantity
+    price_1: float | None = None       # unit price at quantity 1
+    on_order: int | None = None        # PBO: total units on order / backorder across sellers
+    on_order_eta: str | None = None    # earliest expected arrival of on-order stock
     currency: str | None = "USD"
     lifecycle: str | None = None
     url: str | None = None
@@ -87,6 +92,11 @@ def parse_lead_days(s) -> float | None:
     n = float(m.group(1))
     unit = (m.group(2) or "day").lower()
     return n * 7 if unit.startswith("w") else n * 30 if unit.startswith("m") else n
+
+
+def earliest(dates) -> str | None:
+    ds = sorted(str(d)[:10] for d in dates if d)
+    return ds[0] if ds else None
 
 
 def normalize_mpn(mpn: str) -> str:

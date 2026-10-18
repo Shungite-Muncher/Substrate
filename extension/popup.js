@@ -22,9 +22,9 @@ async function run(mpn) {
       </div>
       <div class="kv">
         <div><span>Lead time</span><br><b>${s.lead_days ? fmt(s.lead_days / 7) + " wk" : "–"}</b></div>
-        <div><span>Channel stock</span><br><b>${fmt(s.total_avail)}</b></div>
-        <div><span>1k price</span><br><b>${s.price_1k ? "$" + fmt(s.price_1k, 3) : "–"}</b></div>
-        <div><span>Data</span><br><b>${esc(p.via)}</b></div>
+        <div><span>PBO (on order)</span><br><b>${s.on_order != null ? fmt(s.on_order) : "–"}</b>${s.on_order_eta ? `<br><span>next ${esc(s.on_order_eta)}</span>` : ""}</div>
+        <div><span>Current price</span><br><b>${s.price_1 ? "$" + fmt(s.price_1, 3) : s.price_1k ? "$" + fmt(s.price_1k, 3) : "–"}</b><br><span>${s.price_1 && s.price_1k ? "qty 1 · $" + fmt(s.price_1k, 3) + " @1k" : s.price_1k ? "@1k qty" : ""}</span></div>
+        <div><span>Channel stock</span><br><b>${fmt(s.total_avail)}</b><br><span>via ${esc(p.via)}</span></div>
       </div>
       <b style="font-size:12px">Top drivers</b>
       <ul>${(p.signals || []).slice(0, 3).map((x) => `<li>${esc(x.evidence)}</li>`).join("")}</ul>

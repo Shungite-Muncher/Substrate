@@ -39,7 +39,7 @@ def parse(payload: dict, mpn: str) -> PartRecord | None:
         mpn=p.get("ManufacturerProductNumber") or mpn, provider="digikey",
         manufacturer=(p.get("Manufacturer") or {}).get("Name"),
         description=(p.get("Description") or {}).get("ProductDescription"),
-        category=(p.get("Category") or {}).get("Name"), total_avail=stock, lead_days=lead, price_1k=price,
+        category=(p.get("Category") or {}).get("Name"), total_avail=stock, lead_days=lead, price_1k=price, price_1=price_at(breaks, 1),
         currency="USD", lifecycle=(p.get("ProductStatus") or {}).get("Status"), url=p.get("ProductUrl"),
         sellers=[Offer(seller="DigiKey", stock=stock, lead_days=lead, price_1k=price, currency="USD")])
 

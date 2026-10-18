@@ -165,3 +165,10 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 .ledger-stats { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: .6rem; }
 .ledger-stats b { display: block; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
 .ledger-stats span { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; margin: .9rem 0 .2rem; }
+.facts div { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: .6rem .8rem; }
+.facts span { display: block; font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.facts b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.facts small { color: var(--muted); font-size: .78rem; }
+@media (max-width: 640px) { .facts { grid-template-columns: 1fr; } }

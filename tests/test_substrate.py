@@ -141,3 +141,30 @@ def test_db_roundtrip(tmp_path, monkeypatch):
     con2 = db.connect(tmp_path / "b.db")  # fresh DB rebuilds from the warehouse
     assert con2.execute("SELECT value FROM observations").fetchone()[0] == 1.0
     assert db.usage(con2, "octopart")["parts"] == 2
+
+
+def test_pbo_and_unit_price_parsing():
+    m = mouser.parse({"SearchResults": {"Parts": [{
+        "ManufacturerPartNumber": "STM32F407VGT6", "AvailabilityInStock": "0", "LeadTime": "26 Weeks",
+        "AvailabilityOnOrder": [{"Quantity": 1200, "Date": "2027-01-15T00:00:00"}, {"Quantity": "3,000", "Date": "2026-12-01T00:00:00"}],
+        "PriceBreaks": [{"Quantity": 1, "Price": "$12.40", "Currency": "USD"}, {"Quantity": 1000, "Price": "$8.10", "Currency": "USD"}]}]}},
+        "STM32F407VGT6")
+    assert (m.on_order, m.on_order_eta, m.price_1, m.price_1k, m.lead_days) == (4200, "2026-12-01", 12.4, 8.1, 182)
+    n = nexar.parse({"data": {"supSearchMpn": {"results": [{"part": {
+        "mpn": "X1", "sellers": [{"company": {"name": "A"}, "offers": [
+            {"inventoryLevel": 0, "onOrderQuantity": 500, "onOrderEta": "2026-11-20",
+             "prices": [{"quantity": 1, "price": 2.0, "currency": "USD"}, {"quantity": 1000, "price": 1.1, "currency": "USD"}]}]},
+            {"company": {"name": "B"}, "offers": [{"inventoryLevel": 10, "onOrderQuantity": 250,
+             "prices": [{"quantity": 1, "price": 1.8, "currency": "USD"}]}]}]}}]}}}, "X1")
+    assert (n.on_order, n.on_order_eta, n.price_1) == (750, "2026-11-20", 1.8)
+
+
+def test_schema_migration_adds_new_columns(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.execute("CREATE TABLE part_snapshots (mpn TEXT, provider TEXT, day TEXT, PRIMARY KEY (mpn, provider, day))")
+    old.commit(); old.close()
+    con = db.connect(path)
+    cols = {r[1] for r in con.execute("PRAGMA table_info(part_snapshots)")}
+    assert {"on_order", "on_order_eta", "price_1", "lead_days"} <= cols

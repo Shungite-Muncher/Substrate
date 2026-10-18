@@ -11,7 +11,7 @@ import logging
 import time
 
 from .. import config, db, http
-from .base import Offer, PartProvider, PartRecord, price_at
+from .base import Offer, PartProvider, PartRecord, earliest, price_at
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +38,8 @@ query SubstratePart($q: String!) {
           offers {
             inventoryLevel
             factoryLeadDays
+            onOrderQuantity
+            onOrderEta
             moq
             prices { quantity price currency }
           }
@@ -67,12 +69,14 @@ def parse(payload: dict, mpn: str) -> PartRecord | None:
     if not results:
         return None
     p = results[0]["part"]
-    offers, stock_total = [], 0
+    offers, stock_total, all_breaks = [], 0, []
     for s in p.get("sellers") or []:
         for o in s.get("offers") or []:
             breaks = [(pr["quantity"], pr["price"]) for pr in o.get("prices") or [] if pr.get("currency") in (None, "USD")]
+            all_breaks += breaks
             offers.append(Offer(seller=s["company"]["name"], stock=o.get("inventoryLevel"),
-                                lead_days=o.get("factoryLeadDays"), moq=o.get("moq"),
+                                lead_days=o.get("factoryLeadDays"), on_order=o.get("onOrderQuantity"),
+                                on_order_eta=o.get("onOrderEta"), moq=o.get("moq"),
                                 price_1k=price_at(breaks), currency="USD"))
             stock_total += max(o.get("inventoryLevel") or 0, 0)
     lifecycle = next((sp["displayValue"] for sp in p.get("specs") or []
@@ -86,6 +90,9 @@ def parse(payload: dict, mpn: str) -> PartRecord | None:
         total_avail=p.get("totalAvail") if p.get("totalAvail") is not None else stock_total,
         lead_days=p.get("estimatedFactoryLeadDays"),
         price_1k=median.get("price"), currency=median.get("currency") or "USD",
+        price_1=min((pr for q, pr in all_breaks if q == 1), default=None),
+        on_order=sum(o.on_order or 0 for o in offers) or None,
+        on_order_eta=earliest(o.on_order_eta for o in offers),
         lifecycle=lifecycle, url=p.get("octopartUrl"), sellers=offers[:15])
 
 
@@ -102,11 +109,17 @@ class NexarProvider(PartProvider):
         return True
 
     def lookup(self, con, mpn: str) -> PartRecord | None:
-        r = http.post(GRAPHQL_URL, json={"query": QUERY, "variables": {"q": mpn}},
-                      headers={"Authorization": f"Bearer {_get_token()}"})
-        payload = r.json()
+        payload = self._query(QUERY, mpn)
+        if any("onOrder" in str(e.get("message", "")) for e in payload.get("errors") or []):
+            # schema/plan without on-order fields: retry without them rather than lose the lookup
+            payload = self._query(QUERY.replace("onOrderQuantity", "").replace("onOrderEta", ""), mpn)
         if payload.get("errors"):
             log.warning("nexar %s: %s", mpn, payload["errors"][:1])
         rec = parse(payload, mpn)
         db.record_usage(con, self.name, calls=1, parts=1 if rec else 0)
         return rec
+
+    def _query(self, query: str, mpn: str) -> dict:
+        r = http.post(GRAPHQL_URL, json={"query": query, "variables": {"q": mpn}},
+                      headers={"Authorization": f"Bearer {_get_token()}"})
+        return r.json()
