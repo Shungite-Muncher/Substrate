@@ -3,8 +3,10 @@ average, US$ billions). Each release quotes the current month, the prior month
 and the year-ago month, so even a handful of releases rebuilds useful history."""
 from __future__ import annotations
 
+import json
 import logging
 import re
+from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
 
@@ -52,6 +54,7 @@ def parse_release(text: str) -> dict | None:
 
 
 WP_API = "https://www.semiconductors.org/wp-json/wp/v2/posts"
+READER = "https://r.jina.ai/"
 FEED = "https://www.semiconductors.org/feed/"
 
 
@@ -59,15 +62,29 @@ def _text(html: str) -> str:
     return BeautifulSoup(html or "", "html.parser").get_text(" ", strip=True)
 
 
-def _from_api(backfill: bool) -> list[tuple[str, str]]:
-    """WordPress REST API: full release text as JSON, no per-page fetches. Primary source."""
+def _from_api(backfill: bool, via_reader: bool = False) -> list[tuple[str, str]]:
+    """WordPress REST API: full release text as JSON, no per-page fetches. Primary source.
+
+    SIA's Cloudflare blocks cloud-provider IPs (including GitHub Actions) across the whole
+    site, so the scheduled pipeline reaches the same public JSON through the Jina reader
+    (r.jina.ai), which fetches it from its own network and returns it verbatim.
+    """
     out = []
+    per_page = 50 if backfill else 20
     for page in range(1, 26 if backfill else 2):
-        r = http.get(WP_API, params={"search": "semiconductor sales", "per_page": 50 if backfill else 20, "page": page,
-                                     "_fields": "date,link,title,content"})
-        posts = r.json()
+        params = {"search": "semiconductor sales", "per_page": per_page, "page": page, "_fields": "date,link,title,content"}
+        if via_reader:
+            target = WP_API + "?" + urlencode(params)
+            r = http.get(READER + target, headers={"X-Return-Format": "text"}, timeout=90)
+            body = r.text
+            posts, _ = json.JSONDecoder().raw_decode(body[body.find("[{"):] if "[{" in body else "[]")
+            last = len(posts) < per_page
+        else:
+            r = http.get(WP_API, params=params)
+            posts = r.json()
+            last = page >= int(r.headers.get("X-WP-TotalPages", 1))
         out += [(p["link"], _text(p["content"]["rendered"])) for p in posts]
-        if page >= int(r.headers.get("X-WP-TotalPages", 1)):
+        if last:
             break
     return out
 
@@ -104,7 +121,8 @@ def _from_html(backfill: bool, known: set) -> list[tuple[str, str]]:
 def run(con, backfill: bool = False) -> dict:
     known = {r["url"] for r in db.rows(con, "SELECT DISTINCT url FROM observations WHERE source='sia'")}
     releases, used, errors = [], None, []
-    for name, fetch in (("wp-api", lambda: _from_api(backfill)), ("rss", _from_feed),
+    for name, fetch in (("wp-api", lambda: _from_api(backfill)),
+                        ("wp-api via reader", lambda: _from_api(backfill, via_reader=True)), ("rss", _from_feed),
                         ("html", lambda: _from_html(backfill, known))):
         try:
             releases = fetch()
