@@ -132,6 +132,9 @@ def cmd_serve(a) -> None:
 
 
 def main(argv=None) -> None:
+    for stream in (sys.stdout, sys.stderr):   # Windows consoles default to cp1252; headlines aren't
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     p = argparse.ArgumentParser(prog="substrate", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)

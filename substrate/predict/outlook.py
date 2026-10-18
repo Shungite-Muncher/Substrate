@@ -1,17 +1,22 @@
-"""From market forecasts to decisions: segment outlooks, part lead-time projections
-and buy-timing calls.
+"""From market forecasts to decisions: segment outlooks, part-level forecasts and
+buy-timing calls, with every part forecast logged and auto-scored.
 
 Layering, and how much each layer is validated:
   1. Market forecasts (engine.py): walk-forward tested since 2010.
   2. Segment tilt: shifts the market probability by how far the segment's current
      signals sit from the market's. Not separately validated (no free segment-level
      price history); labelled as a tilt.
-  3. Part projections: lead time 13 weeks out from the segment supply outlook plus the
-     part's own trend. A heuristic until part history accrues; every projection goes into
-     the ledger and is scored when its 13 weeks are up.
+  3. Part forecasts, logged weekly per part and scored 13 weeks later:
+       price:  will the part's 1k price rise?
+       lead:   will its factory lead time lengthen?
+       pbo:    will its on-order / backorder quantity grow?
+       eta:    will the incoming on-order stock slip past its stated arrival date?
+     Each starts as a rule of thumb. parts_model.py trains a model on the accumulated
+     outcomes and swaps it in only once it beats the rule of thumb out of sample.
 """
 from __future__ import annotations
 
+import json
 import math
 from datetime import date, timedelta
 
@@ -20,7 +25,16 @@ from ..segments import SEGMENTS
 
 TILT = 1.0              # log-odds shift per unit of (segment score - market score) / 50
 LEAD_ELASTICITY = 0.30  # log lead-time change at full-confidence tightening (+1)
-LEAD_HORIZON_DAYS = 91
+HORIZON_DAYS = 91
+ETA_GRACE_DAYS = 14     # stock counts as on time if it shows up within 2 weeks of the stated date
+ETA_SLIP_BASE = 0.35    # prior chance a distributor's stated on-order date slips
+FLAT = {"price": 0.01, "lead": 7.0, "pbo": 0.10}   # moves smaller than this don't count as hit or miss
+KINDS = {
+    "price": "Part price direction (13 weeks)",
+    "lead": "Part lead-time direction (13 weeks)",
+    "pbo": "PBO backlog direction (13 weeks)",
+    "eta": "PBO on-time arrival",
+}
 
 
 def _logit(p: float) -> float:
@@ -40,11 +54,13 @@ def _week(d: date) -> str:
     return (d - timedelta(days=d.weekday())).isoformat()
 
 
-def build(con, scores: dict, forecasts: dict) -> dict:
+def build(con, scores: dict, forecasts: dict, part_models: dict | None = None) -> dict:
     f = forecasts.get("forecasts", {})
     price, supply = f.get("ppi_3m"), f.get("cu_3m")
     if not price or not supply:
         return {}
+    pm = part_models or {}
+    models, latest = pm.get("models", {}), pm.get("latest", {})
     mkt = scores["market"]
     segs = {}
     for k, s in scores["segments"].items():
@@ -56,29 +72,61 @@ def build(con, scores: dict, forecasts: dict) -> dict:
     parts = {}
     for mpn, p in scores["parts"].items():
         seg = segs.get(p.get("segment") or "")
-        ps0 = seg["p_supply_tighter"] if seg else supply["prob_up"]
-        pp0 = seg["p_price_up"] if seg else price["prob_up"]
         ref = scores["segments"].get(p.get("segment") or "", mkt)
-        ps = tilt(ps0, p["supply_risk"], ref["supply_risk"])
-        pp = tilt(pp0, p["price_trend"], ref["price_trend"])
+        ps_h = tilt(seg["p_supply_tighter"] if seg else supply["prob_up"], p["supply_risk"], ref["supply_risk"])
+        pp_h = tilt(seg["p_price_up"] if seg else price["prob_up"], p["price_trend"], ref["price_trend"])
         snap = p.get("snapshot") or {}
+        feats = (latest.get(mpn) or {}).get("f") if (latest.get(mpn) or {}).get("day") == snap.get("day") else None
+        out = {"basis": {}}
+
+        # price
+        pp, basis = _choose(models.get("price"), feats, pp_h)
+        out["p_price_up"], out["basis"]["price"] = round(pp, 3), basis
+        out["expected_price_change_3m_pct"] = price["point"]
+        if snap.get("price_1k"):
+            _record(con, "price", mpn, pp, pp_h, basis, snap["price_1k"], snap, point=price["point"])
+
+        # lead time
+        ps, basis, lead_y = _choose(models.get("lead"), feats, ps_h, with_point=True)
+        out["p_supply_tighter"], out["basis"]["lead"] = round(ps, 3), basis
         lead = snap.get("lead_days")
-        proj = None
+        out["lead_projection"] = None
         if lead:
-            s = 2 * ps - 1
-            proj = {"now_weeks": round(lead / 7, 1), "in_13w_weeks": round(lead * math.exp(LEAD_ELASTICITY * s) / 7, 1),
-                    "range_weeks": [round(lead * math.exp(LEAD_ELASTICITY * s - 0.25) / 7, 1),
-                                    round(lead * math.exp(LEAD_ELASTICITY * s + 0.25) / 7, 1)]}
-            _record_part(con, mpn, ps, lead, proj["in_13w_weeks"] * 7)
-        action, why = _timing(pp, ps, price, p)
-        parts[mpn] = {"p_supply_tighter": round(ps, 3), "p_price_up": round(pp, 3),
-                      "expected_price_change_3m_pct": price["point"], "lead_projection": proj,
-                      "action": action, "why": why}
+            y = lead_y if lead_y is not None else LEAD_ELASTICITY * (2 * ps - 1)
+            out["lead_projection"] = {"now_weeks": round(lead / 7, 1), "in_13w_weeks": round(lead * math.exp(y) / 7, 1),
+                                      "range_weeks": [round(lead * math.exp(y - 0.25) / 7, 1),
+                                                      round(lead * math.exp(y + 0.25) / 7, 1)],
+                                      "basis": basis}
+            _record(con, "lead", mpn, ps, ps_h, basis, lead, snap, point=round(lead * math.exp(y), 1))
+
+        # PBO: backlog direction + on-time arrival
+        oo, eta = snap.get("on_order"), snap.get("on_order_eta")
+        out["pbo"] = None
+        if oo:
+            pb, basis = _choose(models.get("pbo"), feats, ps_h)
+            out["pbo"] = {"on_order": oo, "eta": eta, "p_backlog_grows": round(pb, 3), "basis": basis}
+            _record(con, "pbo", mpn, pb, ps_h, basis, oo, snap)
+            if eta:
+                p_slip = _sig(_logit(ETA_SLIP_BASE) + 1.5 * (2 * ps - 1))
+                out["pbo"]["p_eta_slips"] = round(p_slip, 3)
+                _record(con, "eta", mpn, p_slip, p_slip, "heuristic", oo, snap,
+                        target_period=(date.fromisoformat(eta[:10]) + timedelta(days=ETA_GRACE_DAYS)).isoformat(),
+                        extra={"eta": eta[:10], "stock": snap.get("total_avail")})
+
+        out["action"], out["why"] = _timing(pp, ps, price, p)
+        parts[mpn] = out
     return {"segments": segs, "parts": parts,
             "notes": {"segment": "Segment and part probabilities tilt the validated market forecast by how far "
                                  "their current signals sit from the market's. The tilt itself is not yet backtested.",
-                      "lead": "Lead-time projections are heuristic until 13 weeks of part history exist; each one is "
-                              "logged and scored when due."}}
+                      "parts": "Part price, lead-time and PBO forecasts start as rules of thumb. Each is logged weekly "
+                               "and scored 13 weeks later; a trained model replaces a rule only after beating it out of sample."}}
+
+
+def _choose(model, feats, heuristic, with_point=False):
+    if model is not None and feats is not None:
+        p, y = model.predict(feats)
+        return (p, "trained part model", y) if with_point else (p, "trained part model")
+    return (heuristic, "rule of thumb", None) if with_point else (heuristic, "rule of thumb")
 
 
 def _call(p: float, up: str, down: str) -> str:
@@ -100,30 +148,73 @@ def _timing(pp: float, ps: float, price: dict, part: dict) -> tuple[str, str]:
     return "Hold course", why
 
 
-def _record_part(con, mpn: str, p_tight: float, lead_days: float, projected_days: float) -> None:
-    key = (f"lead:{mpn}", _week(date.today()))
+def _record(con, kind: str, mpn: str, prob: float, heuristic: float, basis: str, base_value: float, snap: dict,
+            point: float | None = None, target_period: str | None = None, extra: dict | None = None) -> None:
+    """Log once per part, kind and week. Later runs that week can't revise it."""
+    key = (f"{kind}:{mpn}", _week(date.today()))
     if con.execute("SELECT 1 FROM forecasts WHERE target=? AND base_period=?", key).fetchone():
         return
     db.upsert(con, "forecasts", {
         "target": key[0], "base_period": key[1],
-        "target_period": (date.fromisoformat(key[1]) + timedelta(days=LEAD_HORIZON_DAYS)).isoformat(),
-        "horizon": 13, "made_at": db.now_iso(), "prob_up": round(p_tight, 3), "point": round(projected_days, 1),
-        "lo": None, "hi": None, "basis": "heuristic", "base_value": lead_days,
-        "realized": None, "hit": None, "in_range": None, "resolved_at": None})
+        "target_period": target_period or (date.fromisoformat(key[1]) + timedelta(days=HORIZON_DAYS)).isoformat(),
+        "horizon": 13, "made_at": db.now_iso(), "prob_up": round(prob, 3), "point": point,
+        "lo": None, "hi": None, "basis": basis, "base_value": base_value,
+        "realized": None, "hit": None, "in_range": None, "resolved_at": None,
+        "meta": json.dumps({"heuristic_prob": round(heuristic, 3), "provider": snap.get("provider"),
+                            "snapshot_day": snap.get("day"), **(extra or {})})})
+
+
+def _snap_after(con, mpn: str, day: str, provider: str | None, field: str) -> dict | None:
+    q = (f"SELECT * FROM part_snapshots WHERE mpn=? AND day>=? AND day<=? "
+         f"ORDER BY CASE provider WHEN ? THEN 0 ELSE 1 END, day LIMIT 1")
+    limit = (date.fromisoformat(day) + timedelta(days=45)).isoformat()
+    r = con.execute(q, (mpn, day, limit, provider or "")).fetchone()
+    return dict(r) if r and (field == "on_order" or r[field] is not None) else None
 
 
 def resolve_parts(con) -> int:
-    """Score lead-time projections whose 13 weeks are up against the observed lead time."""
+    """Score every part forecast whose horizon has passed against the observed snapshot."""
     n = 0
-    for r in db.rows(con, "SELECT * FROM forecasts WHERE realized IS NULL AND target LIKE 'lead:%'"):
-        snap = con.execute("SELECT lead_days, day FROM part_snapshots WHERE mpn=? AND day>=? AND lead_days IS NOT NULL "
-                           "ORDER BY day LIMIT 1", (r["target"][5:], r["target_period"])).fetchone()
-        if not snap:
-            continue
-        v = snap["lead_days"]
-        moved = v - r["base_value"]
-        r.update(realized=v, resolved_at=db.now_iso(),
-                 hit=None if abs(moved) < 7 else int((moved > 0) == (r["prob_up"] > 0.5)))
+    today = date.today().isoformat()
+    for r in db.rows(con, "SELECT * FROM forecasts WHERE realized IS NULL AND target LIKE '%:%' AND target_period<=?",
+                     (today,)):
+        kind, mpn = r["target"].split(":", 1)
+        meta = json.loads(r.get("meta") or "{}")
+        prov = meta.get("provider")
+        expired = (date.today() - date.fromisoformat(r["target_period"])).days > 45
+        if kind == "eta":
+            s = _snap_after(con, mpn, r["target_period"], prov, "on_order")
+            if not s:
+                if expired:
+                    r.update(realized=-1, resolved_at=db.now_iso())   # no data: closed, not counted
+                    db.upsert(con, "forecasts", r)
+                    n += 1
+                continue
+            base_oo, base_stock = r["base_value"] or 0, meta.get("stock") or 0
+            arrived = (s.get("on_order") or 0) <= 0.5 * base_oo or (s.get("total_avail") or 0) - base_stock >= 0.5 * base_oo
+            new_eta = (s.get("on_order_eta") or "")[:10]
+            slipped = not arrived and bool(new_eta) and new_eta > meta.get("eta", "")
+            hit = None if not arrived and not slipped else int(slipped == (r["prob_up"] > 0.5))
+            r.update(realized=1 if slipped else 0, hit=hit, resolved_at=db.now_iso())
+        else:
+            field = {"price": "price_1k", "lead": "lead_days", "pbo": "on_order"}[kind]
+            s = _snap_after(con, mpn, r["target_period"], prov, field)
+            if not s:
+                if expired:
+                    r.update(realized=-1, resolved_at=db.now_iso())
+                    db.upsert(con, "forecasts", r)
+                    n += 1
+                continue
+            v, b = (s.get(field) or 0) if kind == "pbo" else s[field], r["base_value"] or 0
+            if kind == "lead":
+                moved, flat = v - b, abs(v - b) < FLAT["lead"]
+            elif kind == "price":
+                moved = (v / b - 1) if b else 0.0
+                flat = abs(moved) < FLAT["price"]
+            else:
+                moved = math.log((v + 1) / (b + 1))
+                flat = abs(moved) < math.log(1 + FLAT["pbo"])
+            r.update(realized=v, resolved_at=db.now_iso(), hit=None if flat else int((moved > 0) == (r["prob_up"] > 0.5)))
         db.upsert(con, "forecasts", r)
         n += 1
     return n

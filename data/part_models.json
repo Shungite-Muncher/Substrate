@@ -1,0 +1,30 @@
+{
+  "lead": {
+    "target": "lead",
+    "label": "Part lead time, 13 weeks out",
+    "pairs": 0,
+    "parts": 0,
+    "needed_pairs": 60,
+    "status": "accumulating",
+    "note": "0/60 outcome pairs across 0/5+ parts"
+  },
+  "price": {
+    "target": "price",
+    "label": "Part price, 13 weeks out",
+    "pairs": 0,
+    "parts": 0,
+    "needed_pairs": 60,
+    "status": "accumulating",
+    "note": "0/60 outcome pairs across 0/5+ parts"
+  },
+  "pbo": {
+    "target": "pbo",
+    "label": "PBO backlog, 13 weeks out",
+    "pairs": 0,
+    "parts": 0,
+    "needed_pairs": 60,
+    "status": "accumulating",
+    "note": "0/60 outcome pairs across 0/5+ parts"
+  },
+  "_generated": "2026-10-18T19:00:27+00:00"
+}

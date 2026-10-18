@@ -194,7 +194,8 @@ function renderPartDetail(p, host) {
     ${p.outlook ? `<div class="scenario"><b>3-month outlook</b> ${actBadge(p.outlook.action)}
       <div style="margin-top:.4rem">${pct(p.outlook.p_price_up)} chance prices rise · ${pct(p.outlook.p_supply_tighter)} chance supply tightens${
         p.outlook.lead_projection ? ` · lead time ${fmt(p.outlook.lead_projection.now_weeks)} → ${fmt(p.outlook.lead_projection.in_13w_weeks)} wk projected` : ""}</div>
-      <small>${esc(p.outlook.why)}</small></div>` : ""}
+      ${p.outlook.pbo ? `<div style="margin-top:.3rem">PBO: ${pct(p.outlook.pbo.p_backlog_grows)} chance the backlog grows${p.outlook.pbo.p_eta_slips != null ? ` · ${pct(p.outlook.pbo.p_eta_slips)} chance the ${esc(p.outlook.pbo.eta)} arrival slips` : ""}</div>` : ""}
+      <small>${esc(p.outlook.why)} · running on ${esc(Object.values(p.outlook.basis || {})[0] || "rule of thumb")}</small></div>` : ""}
     <div class="scenario"><b>Scenario model</b> <small>What would supply risk be if…</small>
       <label>Lead time <input type="range" min="2" max="60" value="${lw}" data-lt><span data-ltv>${lw} wk</span></label>
       <label>Channel stock <input type="range" min="0" max="${Math.round(stMax)}" step="${Math.max(1, Math.round(stMax / 200))}" value="${st}" data-st><span data-stv>${fmt(st)}</span></label>
@@ -414,21 +415,42 @@ function renderOutlook() {
   }).join("");
 
   const parts = [...DATA.parts].filter((p) => p.outlook).sort((a, b) => b.outlook.p_price_up - a.outlook.p_price_up);
-  $("#timing-table").innerHTML = `<thead><tr><th>Part</th><th>Call</th><th class="num">P(price up, 3 mo)</th><th class="num">P(supply tighter)</th><th class="num">Lead now → in 13 wk</th><th>Why</th></tr></thead><tbody>` +
+  $("#timing-table").innerHTML = `<thead><tr><th>Part</th><th>Call</th><th class="num">P(price up, 3 mo)</th><th class="num">P(supply tighter)</th><th class="num">Lead now → in 13 wk</th><th class="num">PBO outlook</th><th>Why</th></tr></thead><tbody>` +
     parts.map((p) => {
       const q = p.outlook, lp = q.lead_projection;
       return `<tr><td class="mono">${esc(p.mpn)}</td><td>${actBadge(q.action)}</td><td class="num">${pct(q.p_price_up)}</td><td class="num">${pct(q.p_supply_tighter)}</td>
-        <td class="num">${lp ? `${fmt(lp.now_weeks)} → <b>${fmt(lp.in_13w_weeks)}</b> wk` : "<small>needs part data</small>"}</td><td>${esc(q.why)}</td></tr>`;
+        <td class="num">${lp ? `${fmt(lp.now_weeks)} → <b>${fmt(lp.in_13w_weeks)}</b> wk` : "<small>needs part data</small>"}</td>
+        <td class="num">${q.pbo ? `${fmt(q.pbo.on_order)} on order<br><small>${pct(q.pbo.p_backlog_grows)} grows${q.pbo.p_eta_slips != null ? ` · ${pct(q.pbo.p_eta_slips)} slips` : ""}</small>` : "<small>needs part data</small>"}</td>
+        <td>${esc(q.why)}</td></tr>`;
     }).join("") + "</tbody>";
 
   $("#seg-outlook").innerHTML = `<thead><tr><th>Segment</th><th>Supply, 3 mo</th><th class="num">P(tighter)</th><th>Prices, 3 mo</th><th class="num">P(up)</th></tr></thead><tbody>` +
     Object.values(o.segments || {}).map((s) => `<tr><td>${esc(s.label)}</td><td>${esc(s.supply_call)}</td><td class="num">${pct(s.p_supply_tighter)}</td>
       <td>${esc(s.price_call)}</td><td class="num">${pct(s.p_price_up)}</td></tr>`).join("") + "</tbody>";
 
-  const L = o.ledger;
+  const L = o.ledger, PM = o.part_models || {};
+  const modelCell = (kind) => {
+    if (o.forecasts[kind]) {
+      const v = o.forecasts[kind].metrics.verdict;
+      return v === "edge" ? `<span class="tag edge">Model: tested edge</span>` : `<span class="tag base">Trend baseline</span>`;
+    }
+    const m = PM[kind];
+    if (!m) return kind === "eta" ? `<span class="tag base">Rule of thumb</span>` : "–";
+    if (m.status === "promoted") return `<span class="tag edge">Trained model, promoted</span>`;
+    if (m.status === "heuristic") return `<span class="tag base">Rule of thumb</span> <small>${esc(m.note)}</small>`;
+    return `<span class="tag base">Rule of thumb</span> <small>model training at ${m.pairs}/${m.needed_pairs} outcome pairs</small>`;
+  };
   $("#ledger").innerHTML = `<div class="ledger-stats"><div><b>${L.made}</b><span>forecasts logged</span></div><div><b>${L.resolved}</b><span>scored so far</span></div>
-    <div><b>${L.hit_rate == null ? "–" : pct(L.hit_rate)}</b><span>live direction hit rate</span></div></div>
-    <p class="hint" style="margin:0">Every forecast is written down the first time it's made, then scored when the outcome is published. Revisions aren't allowed. Market forecasts resolve when the Fed/BLS data for their target month lands; part lead-time projections after 13 weeks. This live record is the validation milestone.</p>`;
+    <div><b>${L.hit_rate == null ? "–" : pct(L.hit_rate)}</b><span>live hit rate, all types</span></div></div>
+    <div class="table-wrap" style="padding:0"><table class="sig-table"><thead><tr><th>Prediction</th><th class="num">Logged</th><th class="num">Scored</th>
+      <th class="num">Live hit rate</th><th class="num">Next due</th><th>Running on</th></tr></thead><tbody>${(L.scorecard || []).map((g) =>
+      `<tr><td>${esc(g.label)}</td><td class="num">${g.made}</td><td class="num">${g.scored}${g.not_scorable ? ` <small>+${g.not_scorable} too flat to call</small>` : ""}</td>
+       <td class="num"><b>${g.hit_rate == null ? "–" : pct(g.hit_rate)}</b></td><td class="num">${esc(g.next_due || "–")}</td><td>${modelCell(g.kind)}</td></tr>`).join("")}
+    ${["price", "lead", "pbo", "eta"].filter((k) => !(L.scorecard || []).some((g) => g.kind === k)).map((k) =>
+      `<tr><td>${esc({ price: "Part price direction, 13 weeks", lead: "Part lead-time direction, 13 weeks", pbo: "PBO backlog direction, 13 weeks", eta: "PBO on-time arrival" }[k])}</td>
+       <td class="num">0</td><td class="num">0</td><td class="num">–</td><td class="num"><small>starts with part data</small></td><td>${modelCell(k)}</td></tr>`).join("")}
+    </tbody></table></div>
+    <p class="hint" style="margin:.6rem 0 0">Every forecast is written down once, when it's made, and can't be revised. The pipeline scores each one automatically when its outcome is published. Market forecasts resolve when Fed/BLS data for the target month lands; part price, lead-time and PBO forecasts after 13 weeks; on-time arrival two weeks after the stated date. Part forecasts start as rules of thumb. A trained model takes over only after it beats the rule, the recent trend and the long-run base rate on later data it never saw.</p>`;
   $("#outlook-notes").textContent = Object.values(o.notes || {}).join(" ");
 }
 

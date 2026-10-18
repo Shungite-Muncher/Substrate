@@ -136,6 +136,21 @@ The model configuration (6 inputs, capping, regularization strength 10) was chos
 - *Lead-time projections* come from the segment supply outlook. They're a heuristic until part history exists.
 - *Buy-timing calls*: **Buy ahead / lock pricing** when the chance of a 3-month price rise is at least 60%; **Wait / keep terms short** when it's 40% or less and supply isn't tightening; otherwise **Hold course**.
 
+**Part-level forecasts, auto-scored.** Every week, for every BOM part with data, Substrate logs four forecasts:
+
+- will its 1k price rise in 13 weeks;
+- will its factory lead time lengthen;
+- will its PBO (on-order or backorder quantity) grow;
+- will incoming PBO stock slip past its stated arrival date.
+
+Each is scored automatically against the part's actual snapshot when it's due. Moves too small to call (a price change under 1%, a lead-time change under a week, a backlog change under 10%) are recorded but not counted as hits or misses.
+
+**Self-promoting part models** (`substrate/predict/parts_model.py`). Part forecasts start as rules of thumb. Each pipeline run builds (today, 13 weeks later) outcome pairs from the accumulated snapshots, one per part per week, using only what was known on day one.
+
+Once at least 60 pairs exist across 5 or more parts, it trains a model on the earlier pairs and tests it on later ones it never saw. It compares the model against the logged rule of thumb, the "recent trend continues" baseline and the historical base rate. The model takes over only if it beats all three, and `data/part_models.json` records where each model stands.
+
+In simulation, a model trained on history where thin stock really does predict longer lead times called direction right 90% of the time (versus 64% for the rule of thumb) and was promoted. On pure noise it stayed benched.
+
 **Forecast ledger.** Every forecast is written to `data/warehouse/forecasts.jsonl` the first time it's made, and can't be revised later. It's scored automatically once the outcome is published: market forecasts when Fed/BLS data lands, part lead-time projections after 13 weeks. This live track record is the validation milestone from the venture summary.
 
 Substrate holds no inventory and takes no position on what customers buy.

@@ -52,7 +52,7 @@ jobs:
         run: |
           git config user.name "substrate-bot"
           git config user.email "substrate-bot@users.noreply.github.com"
-          git add data/warehouse data/calibration.json site/data
+          git add data/warehouse data/calibration.json data/part_models.json site/data
           git diff --cached --quiet || git commit -m "data: $(date -u +'%Y-%m-%d %H:%M') UTC briefing"
           git pull --rebase --autostash
           git push

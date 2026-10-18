@@ -72,6 +72,7 @@ def run(con, results: dict, backtest_report: dict | None = None, outlook: dict |
             "forecasts": {k: {kk: vv for kk, vv in f.items() if kk != "history"} for k, f in o["forecasts"].items()},
             "segments": o.get("segments"), "notes": o.get("notes"),
             "ledger": {k: v for k, v in o["ledger"].items() if k != "recent"},
+            "part_models": {k: v for k, v in (o.get("part_models") or {}).items() if not k.startswith("_")},
         },
     }
     _w("latest.json", latest)

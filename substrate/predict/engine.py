@@ -191,17 +191,40 @@ def resolve(con, d: dict) -> int:
     return n
 
 
+SCORECARD_LABELS = {
+    "ppi_3m": "Chip prices, 3 months", "ppi_6m": "Chip prices, 6 months",
+    "cu_3m": "Fab utilization, 3 months", "cu_6m": "Fab utilization, 6 months",
+    "price": "Part price direction, 13 weeks", "lead": "Part lead-time direction, 13 weeks",
+    "pbo": "PBO backlog direction, 13 weeks", "eta": "PBO on-time arrival",
+}
+
+
 def ledger_summary(con) -> dict:
+    """Live scorecard: every logged forecast, grouped by what it predicts."""
     rows = db.rows(con, "SELECT * FROM forecasts ORDER BY made_at DESC")
     done = [r for r in rows if r["hit"] is not None]
-    by_target = {}
-    for r in done:
-        t = by_target.setdefault(r["target"], {"resolved": 0, "hits": 0})
-        t["resolved"] += 1
-        t["hits"] += r["hit"]
+    groups: dict[str, dict] = {}
+    for r in rows:
+        kind = r["target"].split(":", 1)[0]
+        g = groups.setdefault(kind, {"kind": kind, "label": SCORECARD_LABELS.get(kind, kind), "made": 0, "scored": 0,
+                                     "hits": 0, "not_scorable": 0, "pending": 0, "next_due": None})
+        g["made"] += 1
+        if r["hit"] is not None:
+            g["scored"] += 1
+            g["hits"] += r["hit"]
+        elif r["realized"] is not None:
+            g["not_scorable"] += 1          # moved too little to call, or no outcome data
+        else:
+            g["pending"] += 1
+            if g["next_due"] is None or r["target_period"] < g["next_due"]:
+                g["next_due"] = r["target_period"]
+    for g in groups.values():
+        g["hit_rate"] = round(g["hits"] / g["scored"], 3) if g["scored"] else None
+    order = list(SCORECARD_LABELS)
     return {"made": len(rows), "resolved": len(done),
             "hit_rate": round(sum(r["hit"] for r in done) / len(done), 3) if done else None,
-            "by_target": by_target, "recent": rows[:40]}
+            "scorecard": sorted(groups.values(), key=lambda g: order.index(g["kind"]) if g["kind"] in order else 99),
+            "recent": rows[:40]}
 
 
 def run(con) -> dict:

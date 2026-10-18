@@ -41,7 +41,7 @@ SCHEMA = {
     "forecasts": """
         target TEXT, base_period TEXT, target_period TEXT, horizon INTEGER, made_at TEXT, prob_up REAL,
         point REAL, lo REAL, hi REAL, basis TEXT, base_value REAL, realized REAL, hit INTEGER,
-        in_range INTEGER, resolved_at TEXT, PRIMARY KEY (target, base_period)""",
+        in_range INTEGER, resolved_at TEXT, meta TEXT, PRIMARY KEY (target, base_period)""",
 }
 
 PKS = {
