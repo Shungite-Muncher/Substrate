@@ -5,12 +5,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          probe() { code=$(curl -s -o /tmp/out -w "%{http_code}" -A "Mozilla/5.0 (compatible; SubstrateBot/0.1)" --max-time 40 "$1"); echo "$code $(wc -c < /tmp/out) $1"; grep -o "during the month of [A-Za-z]* 20[0-9][0-9]" /tmp/out | head -2; }
-          probe "https://www.semiconductors.org/wp-json/wp/v2/posts?search=semiconductor%20sales&per_page=3&_fields=link"
-          probe "https://r.jina.ai/https://www.semiconductors.org/feed/"
-          probe "https://archive.org/wayback/available?url=semiconductors.org/feed/"
+          probe() { code=$(curl -sL -o /tmp/out -w "%{http_code}" -A "Mozilla/5.0 (compatible; SubstrateBot/0.1)" --max-time 60 "$1"); echo "$code $(wc -c < /tmp/out) $1"; grep -oE "\\$[0-9.]+ billion (during|in) the month of [A-Za-z]+ 20[0-9]{2}" /tmp/out | head -2; }
+          probe "https://r.jina.ai/https://www.semiconductors.org/wp-json/wp/v2/posts?search=semiconductor%20sales&per_page=5&_fields=link,content"
+          probe "https://r.jina.ai/https://www.semiconductors.org/year-to-date-global-semiconductor-sales-top-1-trillion-through-august/"
           probe "https://web.archive.org/web/2026id_/https://www.semiconductors.org/feed/"
-          probe "https://news.google.com/rss/search?q=%22Global+Semiconductor+Sales%22+semiconductors.org&hl=en-US&gl=US&ceid=US:en"
-          probe "https://www.prnewswire.com/rss/news-releases-list.rss"
-          probe "https://feeds.feedburner.com/semiconductors"
-          probe "https://www.semiconductors.org/?s=semiconductor+sales"
+          probe "https://web.archive.org/web/2026id_/https://www.semiconductors.org/year-to-date-global-semiconductor-sales-top-1-trillion-through-august/"
+          curl -s "https://archive.org/wayback/available?url=semiconductors.org/feed/"; echo
