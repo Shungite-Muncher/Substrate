@@ -10,12 +10,9 @@ jobs:
           python3 - <<'PY'
           import json, os, urllib.request
           key = os.environ["MOUSER_API_KEY"]
-          for mpn in ["STM32F407VGT6", "TPS62130RGTR", "NTMFS5C430NLT1G"]:
+          for mpn in ["STM32F407VGT6","ATSAMD21G18A-AU","LPC55S69JBD100","MT40A1G16TB-062E:F","MT25QL128ABA1EW9-0SIT","W25Q128JVSIQ","TPS62130RGTR","LM358DR","ADS1115IDGSR","AD8605ARTZ-REEL7","XC7A35T-1CSG324C","10M08SAE144C8G","NTMFS5C430NLT1G","C3M0065090D","IPB017N10N5ATMA1","BSS138"]:
               body = json.dumps({"SearchByPartRequest": {"mouserPartNumber": mpn, "partSearchOptions": "Exact"}}).encode()
               req = urllib.request.Request("https://api.mouser.com/api/v1/search/partnumber?apiKey=" + key, body, {"Content-Type": "application/json"})
               p = (json.load(urllib.request.urlopen(req, timeout=30)).get("SearchResults") or {}).get("Parts", [{}])[0]
-              print("==", mpn, "keys:", sorted(p.keys()))
-              print("   compliance:", p.get("ProductCompliance"))
-              print("   attrs:", [(a.get("AttributeName"), a.get("AttributeValue")) for a in (p.get("ProductAttributes") or [])][:12])
-              print("   info:", p.get("InfoMessages"), "| replacement:", p.get("SuggestedReplacement"))
+              print("==", mpn, "| surcharge:", p.get("SurchargeMessages"), "| trade:", p.get("TradeCompliance"), "| info:", p.get("InfoMessages"))
           PY
