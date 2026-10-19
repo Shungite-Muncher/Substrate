@@ -35,6 +35,29 @@ Everything runs on free tiers.
                        └──── Cloudflare Worker (/api/chat, /api/part)
 ```
 
+## Second-wave data, alerts and delivery
+
+| Source | What it adds | Feeds |
+|---|---|---|
+| Census M3 via FRED (back to 1992) | Electronic-component book-to-bill, order backlog, electronics inventory-to-shipments | Supply/price scores |
+| FRED FX (TWD, JPY, KRW) | Asian currency moves vs the dollar | Price score |
+| Korea Customs flash (via wire reports) | 10-/20-day export growth, chip-specific when stated: the earliest monthly demand read | Supply/price; memory weighted 2× |
+| Taiwan MOPS monthly revenues | UMC, Vanguard, PSMC, Nanya, Winbond, Macronix, ASE, MediaTek, SAS vs their own norms | Segment supply scores |
+| DRAMeXchange spot prices (daily) | DDR5/DDR4/DDR3 and NAND spot momentum (needs ~3 weeks of snapshots) | Memory price score |
+| Federal Register API | Export-control, entity-list, tariff and Section 232 actions touching chips | Supply score + alerts |
+| USGS | M5.5+ earthquakes within 250 km of fab clusters | Supply score (when material) + alerts |
+| SEC 10-Q / 10-K | Backlog, book-to-bill, lead-time and pricing language from MD&A | Earnings & filing commentary |
+
+These feed the scores and briefings. They were also tested as **forecast-model inputs** (2010–2026 out of sample) and *did not* improve the price or utilization forecasts, so the models keep their six original inputs.
+
+SIA blocks cloud IPs, so in GitHub Actions the scraper reaches SIA's public WordPress API through the Jina reader (`r.jina.ai`); the direct route, RSS and HTML stay as fallbacks.
+
+**Alerts** fire once each: a BOM part's buy-timing call changes, a market/segment score moves 8+ points between runs, a new chip-relevant policy action, or a strong quake near a fab. They appear on the dashboard and in the briefing.
+
+**Delivery** (all optional, switched on by secrets): Slack (`SLACK_WEBHOOK_URL`), Microsoft Teams Workflows (`TEAMS_WEBHOOK_URL`), email via Resend (`RESEND_API_KEY` + `BRIEFING_EMAIL_TO`). Test with `python -m substrate deliver`.
+
+**Customer PO / quote history:** `python -m substrate history customer_po.csv --customer "Acme"` imports any CSV with part number, date, and price and/or quoted lead time (see `bom/po_history_template.csv`), then immediately backtests the part models on it. Customer rows are their own series: they never appear as live market data and are never compared against distributor prices.
+
 ## Run it locally
 
 ```bash

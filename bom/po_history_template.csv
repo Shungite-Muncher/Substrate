@@ -1,0 +1,4 @@
+Part Number,Order Date,Unit Price,Quantity,Quoted Lead Time (weeks),Supplier,Type
+STM32F407VGT6,2025-03-14,7.42,5000,16,Arrow,PO
+STM32F407VGT6,2025-06-02,7.65,5000,22,Arrow,PO
+TPS62130RGTR,2025-04-21,1.08,25000,12,TI Direct,Quote

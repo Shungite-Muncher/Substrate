@@ -12,7 +12,10 @@ def run(con, scores: dict) -> dict:
     if out.get("status") != "ok":
         return out
     out["resolved_parts_now"] = outlook.resolve_parts(con)
-    pm = parts_model.run(con)                   # rebuild outcome pairs, test, promote if earned
+    market_hist = {t: {h["period"]: (h["p_model"] if out["forecasts"][t]["basis"] == "model" else h["p_trend"])
+                       for h in out["forecasts"][t]["history"]}
+                   for t in ("cu_3m", "ppi_3m") if t in out["forecasts"]}
+    pm = parts_model.run(con, market_hist)      # rebuild outcome pairs, test, promote if earned
     out.update(outlook.build(con, scores, out, pm))
     out["part_models"] = pm["status"]
     out["ledger"] = engine.ledger_summary(con)

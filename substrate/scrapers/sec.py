@@ -113,6 +113,43 @@ def _earnings_releases(con, ticker: str, cik: int, since: date) -> int:
     return n
 
 
+FILING_TERMS = r"backlog|book-to-bill|lead[- ]times?|allocation|supply constraint|capacity constraint|inventory levels|"                r"channel inventory|pricing environment|price increases?|bookings"
+
+
+def _filing_commentary(con, ticker: str, cik: int, since: date) -> int:
+    """10-Q / 10-K MD&A: what suppliers and distributors tell the SEC about backlog,
+    book-to-bill, lead times and pricing. Quarterly, but far more candid than press releases."""
+    sub = http.get(SUBMISSIONS_URL.format(cik=cik), headers=_headers()).json()
+    rec = sub["filings"]["recent"]
+    n = 0
+    for form, filed, acc, doc in zip(rec["form"], rec["filingDate"], rec["accessionNumber"], rec["primaryDocument"]):
+        if form not in ("10-Q", "10-K") or date.fromisoformat(filed) < since or not doc:
+            continue
+        url = DOC_URL.format(cik=cik, acc=acc.replace("-", ""), name=doc)
+        if con.execute("SELECT 1 FROM documents WHERE url=?", (url,)).fetchone():
+            continue
+        try:
+            text = BeautifulSoup(http.get(url, headers=_headers(), timeout=90).text, "html.parser").get_text(" ", strip=True)
+        except Exception as e:
+            log.info("sec filing %s: %s", url, e)
+            continue
+        sents = [x for x in re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text))
+                 if 60 < len(x) < 450 and re.search(FILING_TERMS, x, re.I)]
+        if not sents:
+            continue
+        picked = sents[:10]
+        t = tone.score(" ".join(picked))
+        segs = [s for s, spec in SEGMENTS.items() if ticker in spec["companies"]] or segments_for_text(" ".join(picked))
+        db.upsert(con, "documents", {
+            "url": url, "source": "sec-10q", "published": filed,
+            "title": f"{COMPANY_NAMES.get(ticker, ticker)} {form} ({filed}): backlog, lead-time and pricing commentary",
+            "summary": " ".join(picked)[:1500], "segments": segs,
+            "tags": {"ticker": ticker, "form": form, "matches": t["matches"]},
+            "supply_tone": t["supply_tone"], "price_tone": t["price_tone"], "fetched_at": db.now_iso()})
+        n += 1
+    return n
+
+
 def run(con, backfill: bool = False) -> dict:
     if not config.SEC_CONTACT_EMAIL:
         log.warning("SEC_CONTACT_EMAIL not set; skipping EDGAR (SEC requires a contact email in the User-Agent)")
@@ -120,7 +157,7 @@ def run(con, backfill: bool = False) -> dict:
     ciks = cik_map()
     tickers = list(dict.fromkeys(all_tickers() + config.CUSTOMER_PEERS))
     since = date.today() - timedelta(days=400 if backfill else 120)
-    fin = docs = 0
+    fin = docs = filings = 0
     for t in tickers:
         cik = ciks.get(t)
         if not cik:
@@ -129,6 +166,7 @@ def run(con, backfill: bool = False) -> dict:
         try:
             fin += _financials(con, t, cik)
             docs += _earnings_releases(con, t, cik, since)
+            filings += _filing_commentary(con, t, cik, since)
         except Exception as e:
             log.warning("sec %s: %s", t, e)
-    return {"source": "sec", "financial_rows": fin, "earnings_releases": docs}
+    return {"source": "sec", "financial_rows": fin, "earnings_releases": docs, "filings": filings}

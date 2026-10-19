@@ -18,11 +18,13 @@ from . import bom as bom_mod
 from . import config, db, parts, signals
 from .segments import SEGMENTS, segment_for_category
 
-EXPECTED_SOURCES = {
-    "market": {"supply": {"FRED", "TSMC", "SIA", "Trade press", "Earnings releases"},
-               "price": {"FRED", "SIA", "Trade press", "Earnings releases"}},
-    "segment": {"supply": {"FRED", "TSMC", "SIA", "SEC", "Trade press", "Earnings releases"},
-                "price": {"FRED", "SIA", "SEC", "Trade press", "Earnings releases"}},
+EXPECTED_SOURCES = {   # event-driven sources (USGS, DRAMeXchange for non-memory) aren't expected every run
+    "market": {"supply": {"FRED", "TSMC", "SIA", "Census", "Korea customs", "Federal Register", "Trade press",
+                          "Earnings releases"},
+               "price": {"FRED", "SIA", "FX", "Korea customs", "Trade press", "Earnings releases"}},
+    "segment": {"supply": {"FRED", "TSMC", "SIA", "SEC", "Census", "MOPS", "Korea customs", "Trade press",
+                           "Earnings releases"},
+                "price": {"FRED", "SIA", "SEC", "FX", "Trade press", "Earnings releases"}},
     "part": {"supply": {"FRED", "TSMC", "SIA", "SEC", "Trade press", "Octopart", "Part history"},
              "price": {"FRED", "SIA", "SEC", "Trade press", "Part history"}},
 }

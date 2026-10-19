@@ -24,7 +24,10 @@ from .segments import COMPANY_NAMES, SEGMENTS
 # Publication lag in months: data for month M is typically public in month M+lag.
 PUB_LAG = {"capacity_utilization": 1, "ppi_semis": 1, "tsmc_revenue": 1, "sia_sales": 2}
 HALF_LIFE_DAYS = {"FRED": 45, "TSMC": 40, "SIA": 60, "SEC": 120, "Trade press": 10, "Earnings releases": 60,
-                  "Octopart": 7, "Part history": 14, "Part data": 7}
+                  "Octopart": 7, "Part history": 14, "Part data": 7, "Census": 60, "FX": 30, "Korea customs": 20,
+                  "Federal Register": 45, "MOPS": 40, "DRAMeXchange": 7, "USGS": 7}
+SEC_FILINGS = ("sec-8k", "sec-10q")
+NON_PRESS = SEC_FILINGS + ("fedreg", "usgs")
 
 
 @dataclass
@@ -243,11 +246,11 @@ def _quarter_age(q: str) -> float:
 
 def document_signals(con, segment: str | None, source_kind: str) -> list[Signal]:
     """Aggregate tone from trade press ('news') or earnings releases ('sec-8k')."""
-    if source_kind == "sec-8k":
-        docs = db.rows(con, "SELECT * FROM documents WHERE source='sec-8k'")
-        name, src, half, horizon = "Earnings-release commentary", "Earnings releases", 60, 150
+    if source_kind == "sec-8k":   # earnings releases + 10-Q/10-K backlog and pricing commentary
+        docs = db.rows(con, f"SELECT * FROM documents WHERE source IN ({','.join('?' * len(SEC_FILINGS))})", SEC_FILINGS)
+        name, src, half, horizon = "Earnings & filing commentary", "Earnings releases", 60, 150
     else:
-        docs = db.rows(con, "SELECT * FROM documents WHERE source!='sec-8k'")
+        docs = db.rows(con, f"SELECT * FROM documents WHERE source NOT IN ({','.join('?' * len(NON_PRESS))})", NON_PRESS)
         name, src, half, horizon = "Trade-press tone", "Trade press", 10, 30
     picked = []
     for d in docs:
@@ -278,21 +281,179 @@ def document_signals(con, segment: str | None, source_kind: str) -> list[Signal]
 def segment_signals(con, segment: str, calibration: dict | None = None) -> list[Signal]:
     spec = SEGMENTS[segment]
     sigs = []
-    for s in macro_signals(con, calibration):
+    for s in macro_signals(con, calibration) + extra_macro_signals(con):
         if s.name == "TSMC foundry loading":
             s.weight *= spec["foundry_exposure"]
+        if s.name == "Korea export momentum" and segment == "memory":
+            s.weight *= 2           # Korea's chip exports are mostly memory
         sigs.append(s)
     sigs += inventory_signal(con, spec["companies"], spec["label"], 0.20, 0.10)
+    sigs += taiwan_signal(con, segment)
+    if segment == "memory":
+        sigs += memory_spot_signal(con)
+    sigs += quake_signal(con, segment)
     sigs += document_signals(con, segment, "news")
     sigs += document_signals(con, segment, "sec-8k")
     return [s for s in sigs if s.weight > 0]
 
 
 def market_signals(con, calibration: dict | None = None) -> list[Signal]:
-    sigs = macro_signals(con, calibration)
+    sigs = macro_signals(con, calibration) + extra_macro_signals(con)
+    sigs += quake_signal(con, None)
     sigs += document_signals(con, None, "news")
     sigs += document_signals(con, None, "sec-8k")
     return sigs
+
+
+# ---- second-wave sources: Census, FX, Korea, Federal Register, MOPS, DRAMeXchange, USGS ----
+
+def _avg_last(s: list[tuple[str, float]], n: int = 3) -> float | None:
+    return statistics.fmean(v for _, v in s[-n:]) if len(s) >= n else None
+
+
+def extra_macro_signals(con) -> list[Signal]:
+    out: list[Signal] = []
+    no, sh = dict(series(con, "fred", "components_new_orders")), dict(series(con, "fred", "components_shipments"))
+    months = sorted(set(no) & set(sh))
+    if len(months) >= 3:
+        btb = statistics.fmean(no[m] / sh[m] for m in months[-3:])
+        out.append(Signal("Component book-to-bill", "Census", "supply", _t(btb - 1, 0.05), 0.10,
+                          f"Electronic-component new orders / shipments {btb:.2f} (3-mo avg to {_month_name(months[-1])}); "
+                          f"above 1.00 means orders outrunning output", raw=btb, as_of=months[-1],
+                          url="https://fred.stlouisfed.org/series/A34HNO", age_days=_period_age(months[-1])))
+    uo = series(con, "fred", "components_unfilled_orders")
+    if len(uo) >= 7 and uo[-7][1]:
+        g = ((uo[-1][1] / uo[-7][1]) ** 2 - 1) * 100
+        out.append(Signal("Component order backlog", "Census", "supply", _t(g, 15), 0.08,
+                          f"Electronic-component unfilled orders {g:+.1f}% annualized over 6 months to {_month_name(uo[-1][0])}",
+                          raw=g, as_of=uo[-1][0], url="https://fred.stlouisfed.org/series/A34HUO", age_days=_period_age(uo[-1][0])))
+    inv, shp = dict(series(con, "fred", "electronics_inventories")), dict(series(con, "fred", "electronics_shipments"))
+    m2 = sorted(set(inv) & set(shp))
+    if len(m2) >= 60:
+        ratios = [inv[m] / shp[m] for m in m2]
+        base = statistics.fmean(ratios[-60:])
+        dev = ratios[-1] / base - 1
+        common = dict(raw=ratios[-1], as_of=m2[-1], url="https://fred.stlouisfed.org/series/A34STI",
+                      age_days=_period_age(m2[-1]),
+                      evidence=f"Electronics inventory-to-shipments {ratios[-1]:.2f} vs 5-yr avg {base:.2f} ({dev:+.0%}); "
+                               f"lean inventories mean less buffer")
+        out.append(Signal("Electronics inventory cover", "Census", "supply", _t(-dev, 0.05), 0.08, **common))
+        out.append(Signal("Electronics inventory cover", "Census", "price", _t(-dev, 0.05), 0.05, **common))
+    fx = []
+    for code in ("twd", "jpy", "krw"):
+        s_ = series(con, "fred", f"fx_{code}")
+        if len(s_) >= 4 and s_[-4][1]:
+            fx.append((code.upper(), (s_[-1][1] / s_[-4][1] - 1) * 100, s_[-1][0]))
+    if fx:
+        chg = statistics.fmean(c for _, c, _ in fx)
+        # weaker Asian currencies (more per US$) make Asian-made parts cheaper in dollars
+        out.append(Signal("Asian currency moves", "FX", "price", _t(-chg, 3), 0.08,
+                          "3-mo change per US$: " + ", ".join(f"{c} {v:+.1f}%" for c, v, _ in fx)
+                          + (" (Asian currencies weaker: dollar prices ease)" if chg > 0 else " (Asian currencies stronger: dollar prices firm)"),
+                          raw=chg, as_of=fx[0][2], url="https://fred.stlouisfed.org/series/DEXTAUS", age_days=_period_age(fx[0][2])))
+    k = _korea_latest(con)
+    if k:
+        val, label, period, url, age = k
+        common = dict(raw=val, as_of=period, url=url, age_days=age,
+                      evidence=f"Korea {label} {val:+.0f}% YoY (customs flash via wire reports); earliest hard read on chip demand")
+        out.append(Signal("Korea export momentum", "Korea customs", "supply", _t(val - 10, 40), 0.08, **common))
+        out.append(Signal("Korea export momentum", "Korea customs", "price", _t(val - 10, 40), 0.08, **common))
+    pol = _policy(con)
+    if pol:
+        out.append(pol)
+    return out
+
+
+def _korea_latest(con):
+    rows = db.rows(con, "SELECT * FROM observations WHERE source='korea' ORDER BY period DESC, series")
+    if not rows:
+        return None
+    rank = {"d10": 1, "d20": 2, "month": 3}
+    latest = rows[0]["period"]
+    cand = [r for r in rows if r["period"] == latest]
+    # prefer chip-specific, then the longest window
+    r = max(cand, key=lambda r: (r["series"].startswith("chip"), rank.get(r["series"].rsplit("_", 1)[-1], 0)))
+    window = r["series"].rsplit("_", 1)[-1]
+    days = {"d10": 10, "d20": 20}.get(window, 28)
+    what = ("chip exports" if r["series"].startswith("chip") else "total exports (chip-led)")
+    label = f"{what}, {_month_name(latest)} {'days 1-' + str(days) if window != 'month' else 'full month'}"
+    end = date(int(latest[:4]), int(latest[5:7]), min(days, 28))
+    return r["value"], label, latest, r["url"], max((date.today() - end).days, 0)
+
+
+def _policy(con) -> Signal | None:
+    docs = [(d, _iso_age(d["published"])) for d in db.rows(con, "SELECT * FROM documents WHERE source='fedreg'")]
+    docs = [(d, a) for d, a in docs if a <= 120]
+    if not docs:
+        return None
+    load = sum(d["supply_tone"] * math.exp(-a / 45) for d, a in docs)
+    newest = min(docs, key=lambda x: x[1])[0]
+    return Signal("U.S. trade-policy actions", "Federal Register", "supply", _t(load, 2), 0.08,
+                  f"{len(docs)} export-control / tariff actions in 120 days; latest: “{newest['title'][:100]}” ({newest['published']})",
+                  raw=load, url=newest["url"], age_days=min(a for _, a in docs))
+
+
+def taiwan_signal(con, segment: str) -> list[Signal]:
+    from .scrapers.taiwan import COMPANIES
+    parts, notes, ages, urls = [], [], [], []
+    for t, (name, _, seg) in COMPANIES.items():
+        if seg != segment:
+            continue
+        rev = series(con, "mops", f"{t}:revenue")
+        g = yoy_growth(rev)
+        if g is None:
+            continue
+        hist = [x for x in (yoy_growth(rev[:i]) for i in range(max(15, len(rev) - 36), len(rev))) if x is not None]
+        base = statistics.median(hist) if len(hist) >= 6 else 5.0
+        parts.append(_t(g - base, 20))
+        notes.append(f"{name} {g:+.0f}% YoY (typical {base:+.0f}%)")
+        ages.append(_period_age(rev[-1][0]))
+        urls.append(_url(con, "mops", f"{t}:revenue"))
+    if not parts:
+        return []
+    return [Signal("Taiwan supply-chain loading", "MOPS", "supply", statistics.fmean(parts), 0.12,
+                   "3-mo revenue: " + "; ".join(notes), raw=statistics.fmean(parts), url=urls[0],
+                   age_days=statistics.fmean(ages))]
+
+
+def memory_spot_signal(con) -> list[Signal]:
+    items = [r["series"] for r in db.rows(con, "SELECT DISTINCT series FROM observations WHERE source='dramx'")]
+    chg, notes, last_day = [], [], None
+    for it in items:
+        s_ = series(con, "dramx", it)
+        if len(s_) < 2:
+            continue
+        end_day = date.fromisoformat(s_[-1][0])
+        ref = [v for d, v in s_ if (end_day - date.fromisoformat(d)).days >= 21]
+        if not ref:
+            continue
+        c = (s_[-1][1] / ref[-1] - 1) * 100
+        chg.append(c)
+        notes.append(f"{it.split(' (')[0]} {c:+.1f}%")
+        last_day = s_[-1][0]
+    if not chg:
+        return []           # needs ~3 weeks of daily snapshots before it speaks
+    m = statistics.fmean(chg)
+    common = dict(raw=m, as_of=last_day, url="https://www.dramexchange.com/", age_days=_iso_age(last_day + "T12:00:00+00:00"),
+                  evidence=f"Memory spot prices over ~4 weeks: {', '.join(notes[:5])} (DRAMeXchange session averages)")
+    return [Signal("Memory spot prices", "DRAMeXchange", "price", _t(m, 10), 0.30, **common),
+            Signal("Memory spot prices", "DRAMeXchange", "supply", _t(m, 10), 0.10, **common)]
+
+
+def quake_signal(con, segment: str | None) -> list[Signal]:
+    hits = []
+    for d in db.rows(con, "SELECT * FROM documents WHERE source='usgs'"):
+        age = _iso_age(d["published"])
+        if age > 21 or (segment and segment not in json.loads(d["segments"] or "[]")):
+            continue
+        hits.append((d, age, d["supply_tone"] * math.exp(-age / 7)))
+    if not hits:
+        return []
+    d, age, v = max(hits, key=lambda x: x[2])
+    if v < 0.15:            # distant or moderate quakes stay in the news feed, not the score
+        return []
+    return [Signal("Earthquake near fabs", "USGS", "supply", min(1.0, v), 0.15,
+                   f"{d['title']} ({d['published'][:10]})", raw=v, url=d["url"], age_days=age)]
 
 
 BASELINE_LEAD_DAYS = 84  # ~12 weeks: a "normal" factory lead time for standard semis

@@ -29,6 +29,8 @@ FORMAT = """Structure exactly:
 ## What changed
 - 3-5 bullets on new data and score moves, each with a citation.
 
+## Alerts   (only if the "alerts" list in the context is non-empty; one bullet each, most severe first)
+
 ## Segment board
 - one line per segment: name, supply label (score, change), price label (score), confidence.
 
@@ -49,7 +51,7 @@ def edition_for(now: datetime | None = None) -> str:
     return "Asia open" if h >= 20 or h < 6 else "U.S. open"
 
 
-def build_context(con, results: dict, outlook: dict | None = None) -> dict:
+def build_context(con, results: dict, outlook: dict | None = None, alerts: list | None = None) -> dict:
     as_of = results["as_of"]
     prev = scoring.previous(con, as_of)
     sources: list[dict] = []
@@ -98,7 +100,8 @@ def build_context(con, results: dict, outlook: dict | None = None) -> dict:
                   "price_tone": n["price_tone"], "source": cite(f"{n['source']}: {n['title']}", n["url"])} for n in news]
     return {"as_of": as_of, "edition": edition_for(), "customer": config.CUSTOMER_NAME, "market": market,
             "segments": segs, "bom_watchlist": watch, "new_headlines": headlines,
-            "outlook": outlook_context(outlook), "sources": sources}
+            "outlook": outlook_context(outlook), "alerts": [{k: a[k] for k in ("kind", "title", "detail")} for a in alerts or []],
+            "sources": sources}
 
 
 def outlook_context(outlook: dict | None) -> dict | None:
@@ -132,6 +135,9 @@ def template_briefing(ctx: dict) -> str:
         lines.append(f"- {d['evidence']} [{d['source']}]")
     for h in ctx["new_headlines"][:2]:
         lines.append(f"- {h['outlet']}: {h['title']} [{h['source']}]")
+    if ctx.get("alerts"):
+        lines += ["", "## Alerts"]
+        lines += [f"- **{a['kind'].title()}:** {a['title']}" for a in ctx["alerts"][:8]]
     lines += ["", "## Segment board"]
     for s in sorted(ctx["segments"], key=lambda s: -s["supply_risk"]):
         c = "" if s["supply_change"] is None else f", {s['supply_change']:+.1f}"
@@ -175,8 +181,8 @@ def sources_md(ctx: dict) -> str:
                      for i, s in enumerate(ctx["sources"], 1))
 
 
-def write(con, results: dict, use_llm: bool = True, outlook: dict | None = None) -> dict:
-    ctx = build_context(con, results, outlook)
+def write(con, results: dict, use_llm: bool = True, outlook: dict | None = None, alerts: list | None = None) -> dict:
+    ctx = build_context(con, results, outlook, alerts)
     body, model = None, "template"
     if use_llm and llm.available():
         prompt = (f"{FORMAT}\n\nEdition: {ctx['edition']} briefing for {ctx['customer']}.\n"

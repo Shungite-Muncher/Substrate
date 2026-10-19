@@ -59,6 +59,12 @@ function renderBriefing(i = 0) {
   $$("#briefing a").forEach((a) => { a.target = "_blank"; a.rel = "noopener"; });
   $$("#archive li").forEach((li, j) => li.classList.toggle("active", j === i));
 }
+function renderAlerts() {
+  const a = DATA.alerts || [];
+  if (!$("#alerts")) return;          // stale cached HTML: skip rather than break the page
+  $("#alerts").innerHTML = a.length ? `<div class="card alerts"><h3>Alerts since the last briefing</h3><ul style="margin:0;padding-left:1.1rem">${a.map((x) =>
+    `<li><span class="k">${esc(x.kind)}</span>${esc(x.title)}${x.url ? ` <a href="${esc(x.url)}" target="_blank" rel="noopener">source</a>` : ""}${x.detail ? `<br><small>${esc(x.detail)}</small>` : ""}</li>`).join("")}</ul></div>` : "";
+}
 function renderArchive() {
   $("#archive").innerHTML = DATA.briefings.map((b) =>
     `<li>${new Date(b.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${esc(b.edition)}<br><small>${esc(b.headline)}</small></li>`).join("");
@@ -118,6 +124,8 @@ function drawMarketCharts() {
   lineChart("c-sia", s.sia_sales, "Global sales");
   lineChart("c-cu", s.capacity_utilization, "Utilization");
   lineChart("c-ppi", s.ppi_semis, "PPI");
+  lineChart("c-btb", s.component_btb, "Book-to-bill");
+  lineChart("c-korea", s.korea_exports, "Exports YoY %");
 }
 
 // ---------- BOM ---------------------------------------------------------------
@@ -523,6 +531,7 @@ $("#set-save").addEventListener("click", () => {
   }
   const asOf = new Date(DATA.generated);
   $("#meta").innerHTML = `<b>${esc(DATA.customer)}</b><br>updated ${asOf.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`;
+  renderAlerts();
   renderBriefing(0);
   renderArchive();
   renderMarket();

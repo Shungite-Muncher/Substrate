@@ -150,6 +150,10 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
   .inline-form, .chat-form { flex-direction: column; }
 }
 
+.alerts { border-left: 3px solid var(--risk-hi); }
+.alerts li { margin: .25rem 0; }
+.alerts .k { display: inline-block; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--risk-hi); margin-right: .4rem; }
 .forecasts { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .8rem; margin-bottom: 1rem; }
 .fc .p { font-size: 2rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
 .fc .p small { font-size: .85rem; font-weight: 500; }

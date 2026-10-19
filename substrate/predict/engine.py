@@ -229,7 +229,7 @@ def ledger_summary(con) -> dict:
 
 def run(con) -> dict:
     d = load(con)
-    if not all(d.values()):
+    if not all(d.get(k) for k in ("ppi", "cu", "ip", "tsmc")):
         return {"status": "missing data", "forecasts": {}}
     resolved = resolve(con, d)
     rows = build_rows(d)

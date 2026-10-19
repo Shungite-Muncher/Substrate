@@ -17,7 +17,16 @@ SERIES = {
     "cu": ("fred", "capacity_utilization"),
     "ip": ("fred", "industrial_production"),
     "tsmc": ("tsmc", "monthly_revenue"),
+    "no": ("fred", "components_new_orders"),
+    "vs": ("fred", "components_shipments"),
+    "uo": ("fred", "components_unfilled_orders"),
+    "einv": ("fred", "electronics_inventories"),
+    "eshp": ("fred", "electronics_shipments"),
+    "twd": ("fred", "fx_twd"),
+    "jpy": ("fred", "fx_jpy"),
+    "krw": ("fred", "fx_krw"),
 }
+CORE = ("ppi", "cu", "ip", "tsmc")
 
 FEATURES = {
     "ppi_m3": "Chip PPI momentum, 3-mo annualized %",
@@ -30,6 +39,10 @@ FEATURES = {
     "ip_m3": "Chip industrial production, 3-mo annualized %",
     "tsmc_g": "TSMC revenue, 3-mo YoY growth %",
     "tsmc_accel": "TSMC revenue growth acceleration (vs 3 months earlier)",
+    "comp_btb": "Electronic-component book-to-bill (Census, 3-mo avg)",
+    "comp_uo_g": "Electronic-component order backlog growth, 6-mo annualized %",
+    "elec_is_dev": "Electronics inventory-to-shipments vs 5-yr norm (%)",
+    "fx_asia": "Asian currencies per US$, 3-mo change % (avg TWD/JPY/KRW)",
 }
 # The models use a compact subset. Out of sample (2010-2026), six inputs beat all ten
 # for every target: fewer, less-correlated inputs overfit less on ~300 monthly rows.
@@ -62,6 +75,22 @@ def _tsmc_g(s, i):
     return _log(a, b, 100) if a and b else None
 
 
+def _extra(d: dict, i: int) -> dict:
+    out = {}
+    try:
+        out["comp_btb"] = statistics.fmean(d["no"][i - k] / d["vs"][i - k] for k in range(3))
+        out["comp_uo_g"] = ((d["uo"][i] / d["uo"][i - 6]) ** 2 - 1) * 100
+        ratios = [d["einv"][i - k] / d["eshp"][i - k] for k in range(60)]
+        out["elec_is_dev"] = (ratios[0] / statistics.fmean(ratios) - 1) * 100
+    except (KeyError, ZeroDivisionError):
+        pass
+    fx = [(d[c][i] / d[c][i - 3] - 1) * 100 for c in ("twd", "jpy", "krw")
+          if i in d.get(c, {}) and i - 3 in d.get(c, {})]
+    if len(fx) == 3:
+        out["fx_asia"] = statistics.fmean(fx)
+    return out
+
+
 def features_at(d: dict, i: int) -> dict | None:
     ppi, cu, ip, ts = d["ppi"], d["cu"], d["ip"], d["tsmc"]
     try:
@@ -87,12 +116,14 @@ def features_at(d: dict, i: int) -> dict | None:
         f["tsmc_accel"] = None if f["tsmc_g"] is None or prev is None else f["tsmc_g"] - prev
     except KeyError:
         return None
-    return f if all(v is not None for v in f.values()) else None
+    if not all(v is not None for v in f.values()):
+        return None
+    return {**f, **_extra(d, i)}
 
 
 def latest_base(d: dict) -> int:
-    """Most recent month for which every series has published."""
-    return min(max(s) for s in d.values() if s)
+    """Most recent month for which every core series has published."""
+    return min(max(d[k]) for k in CORE if d.get(k))
 
 
 def target_value(d: dict, name: str, i: int, h: int) -> float | None:

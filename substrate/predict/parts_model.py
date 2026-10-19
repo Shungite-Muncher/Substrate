@@ -35,7 +35,8 @@ PROMOTE_MARGIN = 0.02            # Brier improvement required over the best alte
 L2 = 10.0
 
 FEATURES = ["lead_gap", "lead_trend", "price_trend_28d", "pbo_trend_28d", "cover", "sellers", "on_order_rel",
-            "supply_score", "price_score", "market_p_supply"]
+            "has_market_data", "supply_score", "price_score", "market_p_supply"]
+CUSTOMER = "customer"
 
 TARGETS = {
     "lead": {"label": "Part lead time, 13 weeks out", "field": "lead_days", "threshold": 3.5 / 84,
@@ -70,24 +71,28 @@ def heuristic_prob(target: str, f: dict) -> float:
 
 # ---- dataset ------------------------------------------------------------------------
 
-def _weekly_snapshots(con) -> dict[str, list[dict]]:
-    """First snapshot of each ISO week per part, preferring Octopart when several exist that day."""
+def _weekly_snapshots(con) -> dict[tuple[str, str], list[dict]]:
+    """First snapshot of each ISO week per part and source series. Customer PO/quote history is its
+    own series, and market providers form another (preferring Octopart on days with both), so an
+    outcome pair never compares a customer's negotiated price against a distributor's list price."""
     rows = db.rows(con, "SELECT * FROM part_snapshots ORDER BY mpn, day, "
                         "CASE provider WHEN 'octopart' THEN 0 ELSE 1 END")
-    out: dict[str, list[dict]] = {}
+    out: dict[tuple[str, str], list[dict]] = {}
     seen = set()
     for r in rows:
-        d = date.fromisoformat(r["day"])
-        wk = (r["mpn"], d.isocalendar()[:2])
+        series_key = (r["mpn"], CUSTOMER if r["provider"] == CUSTOMER else "market")
+        wk = (series_key, date.fromisoformat(r["day"]).isocalendar()[:2])
         if wk in seen:
             continue
         seen.add(wk)
-        out.setdefault(r["mpn"], []).append(r)
+        out.setdefault(series_key, []).append(r)
     return out
 
 
 def _value(r: dict, field: str):
     v = r.get(field)
+    if field == "on_order" and r.get("provider") == CUSTOMER:
+        return None                       # PO history says nothing about distributor backlog
     return 0.0 if field == "on_order" and v is None else v
 
 
@@ -100,33 +105,44 @@ def _at_or_before(seq: list[dict], day: date, max_gap: int) -> dict | None:
     return best
 
 
-def _context(con, mpn: str, day: str) -> dict:
-    """Scores and market forecasts as they stood on `day` (no later information)."""
+def _prev_month(day: str) -> str:
+    d = date.fromisoformat(day)
+    return f"{d.year - (d.month == 1)}-{(d.month - 2) % 12 + 1:02d}"
+
+
+def _context(con, mpn: str, day: str, market_hist: dict | None = None) -> dict:
+    """Scores and market forecasts as they stood on `day` (no later information). Before the live
+    ledger existed (e.g. imported customer history), market odds come from the walk-forward
+    forecasts, which were themselves made only from data public at the time."""
     s = con.execute("SELECT supply_risk, price_trend FROM scores WHERE scope='part' AND key=? AND as_of<=? "
                     "ORDER BY as_of DESC LIMIT 1", (mpn, day + "T23:59Z")).fetchone()
     def fc(target):
         r = con.execute("SELECT prob_up FROM forecasts WHERE target=? AND made_at<=? ORDER BY made_at DESC LIMIT 1",
                         (target, day + "T23:59:59+00:00")).fetchone()
-        return r["prob_up"] if r else 0.5
+        if r:
+            return r["prob_up"]
+        return ((market_hist or {}).get(target) or {}).get(_prev_month(day), 0.5)
     return {"supply_score": ((s["supply_risk"] if s else 50) - 50) / 50,
             "price_score": ((s["price_trend"] if s else 50) - 50) / 50,
             "market_p_supply": fc("cu_3m"), "market_p_price": fc("ppi_3m")}
 
 
 def features_for(snap: dict, prev: dict | None, ctx: dict, annual_qty: float | None) -> dict | None:
-    lead, stock = snap.get("lead_days"), snap.get("total_avail")
-    if lead is None or stock is None:
+    lead, stock, price = snap.get("lead_days"), snap.get("total_avail"), snap.get("price_1k")
+    if lead is None and price is None:
         return None
     sellers = snap.get("sellers")
     if isinstance(sellers, str):
         sellers = json.loads(sellers or "[]")
     on_order = snap.get("on_order") or 0
     f = {
-        "lead_gap": (lead - 84) / 84,
-        "lead_trend": math.log(lead / prev["lead_days"]) if prev and prev.get("lead_days") else 0.0,
-        "cover": math.log1p(stock / (annual_qty / 52)) if annual_qty else math.log10(stock + 1) / 2,
+        "lead_gap": (lead - 84) / 84 if lead else 0.0,
+        "lead_trend": math.log(lead / prev["lead_days"]) if lead and prev and prev.get("lead_days") else 0.0,
+        "cover": (0.0 if stock is None else
+                  math.log1p(stock / (annual_qty / 52)) if annual_qty else math.log10(stock + 1) / 2),
+        "has_market_data": 0.0 if stock is None else 1.0,
         "sellers": float(len({s["seller"] for s in sellers or [] if (s.get("stock") or 0) > 0})),
-        "on_order_rel": math.log1p(on_order / max(stock, 1)),
+        "on_order_rel": math.log1p(on_order / max(stock or 0, 1)),
         "price_trend_28d": (math.log(snap["price_1k"] / prev["price_1k"])
                             if prev and prev.get("price_1k") and snap.get("price_1k") else 0.0),
         "pbo_trend_28d": math.log((on_order + 1) / ((prev.get("on_order") or 0) + 1)) if prev else 0.0,
@@ -150,21 +166,22 @@ def _week(day: str) -> str:
     return (d - timedelta(days=d.weekday())).isoformat()
 
 
-def build_pairs(con) -> list[dict]:
+def build_pairs(con, market_hist: dict | None = None) -> list[dict]:
     annual = {r["mpn"]: r["annual_qty"] for r in db.rows(con, "SELECT mpn, annual_qty FROM bom")}
     logged = _logged_heuristics(con)
     pairs = []
-    for mpn, seq in _weekly_snapshots(con).items():
+    for (mpn, kind), seq in _weekly_snapshots(con).items():
         for snap in seq:
             d0 = date.fromisoformat(snap["day"])
             prev = _at_or_before(seq, d0 - timedelta(days=28), 14)
-            f = features_for(snap, prev, _context(con, mpn, snap["day"]), annual.get(mpn))
+            f = features_for(snap, prev, _context(con, mpn, snap["day"], market_hist), annual.get(mpn))
             if not f:
                 continue
             f["_heuristic"] = {t: logged.get((t, mpn, _week(snap["day"]))) for t in TARGETS}
             later = [r for r in seq if HORIZON_DAYS <= (date.fromisoformat(r["day"]) - d0).days
                      <= HORIZON_DAYS + MATCH_WINDOW_DAYS]
-            row = {"mpn": mpn, "day": snap["day"], "f": f, "now": {k: _value(snap, s["field"]) for k, s in TARGETS.items()}}
+            row = {"mpn": mpn, "series": kind, "day": snap["day"], "f": f,
+                   "now": {k: _value(snap, s["field"]) for k, s in TARGETS.items()}}
             if later:
                 row["outcome_day"] = later[0]["day"]
                 row["later"] = {k: _value(later[0], s["field"]) for k, s in TARGETS.items()}
@@ -176,6 +193,8 @@ def _y(row: dict, target: str) -> float | None:
     if "later" not in row:
         return None
     a, b = row["now"][target], row["later"][target]
+    if a is None or b is None:
+        return None
     if target == "pbo":
         return math.log((b + 1) / (a + 1))
     if not a or not b:
@@ -217,6 +236,8 @@ def evaluate(pairs: list[dict], target: str) -> dict:
               "persistence": brier(p_pers, y_te), "climatology": brier(p_clim, y_te)}
     best_alt = min(v for k, v in scores.items() if k != "model")
     promoted = scores["model"] < best_alt * (1 - PROMOTE_MARGIN)
+    sources = sorted({r["series"] for r in labelled})
+    base["sources"] = sources
     return {**base, "status": "promoted" if promoted else "heuristic",
             "note": ("trained model beats heuristic, persistence and base rate out of sample" if promoted else
                      "tested; trained model not better than " +
@@ -242,8 +263,8 @@ class Promoted:
         return float(self.clf.prob(x)[0]), float(self.reg.predict(x)[0])
 
 
-def run(con) -> dict:
-    pairs = build_pairs(con)
+def run(con, market_hist: dict | None = None) -> dict:
+    pairs = build_pairs(con, market_hist)
     status, models = {}, {}
     for t in TARGETS:
         status[t] = evaluate(pairs, t)
@@ -252,7 +273,9 @@ def run(con) -> dict:
     status["_generated"] = db.now_iso()
     STATUS_PATH.write_text(json.dumps(status, indent=2), encoding="utf-8", newline="\n")
     latest = {}
-    for r in pairs:                       # most recent feature row per part, for live predictions
+    for r in pairs:                       # most recent *market* feature row per part, for live predictions
+        if r["series"] == CUSTOMER:
+            continue
         if r["mpn"] not in latest or r["day"] > latest[r["mpn"]]["day"]:
             latest[r["mpn"]] = r
     return {"status": status, "models": models, "latest": latest}

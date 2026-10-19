@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from . import config, db, parts, signals
+from . import history as customer_history
 from .segments import COMPANY_NAMES, SEGMENTS
 
 
@@ -32,7 +33,13 @@ def _part_view(p: dict) -> dict:
     }
 
 
-def run(con, results: dict, backtest_report: dict | None = None, outlook: dict | None = None) -> dict:
+def _ratio(a, b):
+    bm = dict(b)
+    return [(p, round(v / bm[p], 3)) for p, v in a if bm.get(p)]
+
+
+def run(con, results: dict, backtest_report: dict | None = None, outlook: dict | None = None,
+        alerts: list | None = None) -> dict:
     briefs = db.rows(con, "SELECT id, created_at, edition, headline, body_md, model FROM briefings "
                           "ORDER BY created_at DESC LIMIT 14")
     news = db.rows(con, "SELECT title, url, source, published, segments, supply_tone, price_tone FROM documents "
@@ -61,18 +68,23 @@ def run(con, results: dict, backtest_report: dict | None = None, outlook: dict |
             "sia_sales": signals.series(con, "sia", "global_sales_3mma")[-48:],
             "capacity_utilization": signals.series(con, "fred", "capacity_utilization")[-120:],
             "ppi_semis": signals.series(con, "fred", "ppi_semis")[-120:],
+            "component_btb": _ratio(signals.series(con, "fred", "components_new_orders"),
+                                    signals.series(con, "fred", "components_shipments"))[-72:],
+            "korea_exports": [(p, v) for p, v in signals.series(con, "korea", "exports_yoy_d10")][-24:],
         },
         "inventory_days": inventory,
         "providers": parts.configured(),
         "octopart_usage": db.usage(con, "octopart"),
         "model": {"baseline_lead_days": signals.BASELINE_LEAD_DAYS},
         "backtest": {k: v for k, v in (backtest_report or {}).items() if k != "series"} or None,
+        "alerts": alerts or [],
         "outlook": None if not o else {
             "generated": o["generated"],
             "forecasts": {k: {kk: vv for kk, vv in f.items() if kk != "history"} for k, f in o["forecasts"].items()},
             "segments": o.get("segments"), "notes": o.get("notes"),
             "ledger": {k: v for k, v in o["ledger"].items() if k != "recent"},
             "part_models": {k: v for k, v in (o.get("part_models") or {}).items() if not k.startswith("_")},
+            "customer_history": customer_history.summary(con),
         },
     }
     _w("latest.json", latest)
@@ -101,6 +113,7 @@ def run(con, results: dict, backtest_report: dict | None = None, outlook: dict |
         "peer_inventory_days": {t: v for t, v in inventory.items() if t in config.CUSTOMER_PEERS},
         "latest_briefing": briefs[0]["body_md"] if briefs else None,
         "headlines": [{"title": n["title"], "source": n["source"], "url": n["url"]} for n in news[:12]],
+        "alerts": [{"kind": a["kind"], "title": a["title"]} for a in alerts or []],
         "outlook": None if not o else {
             "forecasts": [{"what": f["label"], "p_up": f["prob_up"], "up_means": f["up"], "expected": f["point"],
                            "unit": f["unit"], "range80": [f["lo"], f["hi"]], "basis": f["basis"],

@@ -63,4 +63,12 @@ PART_REFRESH_DAYS = int(env("PART_REFRESH_DAYS", "3"))
 CUSTOMER_NAME = env("SUBSTRATE_CUSTOMER", "Demo Distributor")
 CUSTOMER_PEERS = [t.strip() for t in env("SUBSTRATE_PEERS", "ARW,AVT").split(",") if t.strip()]
 
+# Delivery (all optional): Slack / Teams incoming webhooks, email via Resend (free tier).
+SITE_URL = env("SITE_URL", "https://shungite-muncher.github.io/Substrate/")
+SLACK_WEBHOOK_URL = env("SLACK_WEBHOOK_URL")
+TEAMS_WEBHOOK_URL = env("TEAMS_WEBHOOK_URL")
+RESEND_API_KEY = env("RESEND_API_KEY")
+BRIEFING_EMAIL_TO = env("BRIEFING_EMAIL_TO")
+BRIEFING_EMAIL_FROM = env("BRIEFING_EMAIL_FROM", "Substrate <onboarding@resend.dev>")
+
 HTTP_CACHE_DIR = DATA_DIR / ".http_cache"

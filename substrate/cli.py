@@ -6,7 +6,9 @@ import json
 import logging
 import sys
 
-from . import backtest, briefing, config, db, export, parts, predict, scoring, scrapers
+from . import alerts as alerts_mod
+from . import history as history_mod
+from . import backtest, briefing, config, db, deliver, export, parts, predict, scoring, scrapers
 from . import bom as bom_mod
 
 log = logging.getLogger("substrate")
@@ -42,10 +44,13 @@ def cmd_run(a) -> None:
         report = backtest.run(con)
         results = scoring.run(con, backtest.load_calibration())
         outlook = predict.run(con, results)
-        b = briefing.write(con, results, use_llm=not a.no_llm, outlook=outlook)
-        ex = export.run(con, results, report, outlook)
+        alerts = alerts_mod.build(con, results, outlook)
+        b = briefing.write(con, results, use_llm=not a.no_llm, outlook=outlook, alerts=alerts)
+        ex = export.run(con, results, report, outlook, alerts)
         db.dump_warehouse(con)
+    delivered = {} if a.no_deliver else deliver.send(b, alerts, outlook)
     print(json.dumps({"scraped": scraped, "parts": pr, "briefing": b["headline"], "model": b["model"],
+                      "alerts": [x["title"] for x in alerts], "delivered": delivered,
                       "export": ex, "market": {k: results["market"][k] for k in ("supply_risk", "price_trend", "confidence")}},
                      indent=2, default=str))
 
@@ -82,6 +87,34 @@ def cmd_part(a) -> None:
         print(f"  {s['component']:6} {s['norm']:+.2f} x{s['weight']:.2f}  {s['name']}: {s['evidence']}")
 
 
+def cmd_history(a) -> None:
+    """Import a customer's PO/quote history and immediately backtest the part models on it."""
+    with db.open_db() as con:
+        r = history_mod.ingest(con, a.path, a.customer)
+        print(f"imported {r['rows']} rows -> {r['snapshots']} part-days across {r['parts']} parts, {r['span']}; "
+              f"columns used {r['columns']}; skipped {r['skipped']}")
+        results = scoring.run(con, backtest.load_calibration())
+        o = predict.run(con, results)
+        export.run(con, results, outlook=o)
+        db.dump_warehouse(con)
+    for t, st in (o.get("part_models") or {}).items():
+        if t.startswith("_"):
+            continue
+        line = f"  {st['label']:32} {st['status']:12} {st.get('note', '')}"
+        if st.get("brier"):
+            line += f"  brier model {st['brier']['model']} vs rule {st['brier']['heuristic']}, hit {st['hit_rate']}"
+        print(line)
+
+
+def cmd_deliver(a) -> None:
+    """Send the latest briefing to every configured channel (use to test webhooks)."""
+    if not deliver.channels():
+        sys.exit("No channel configured: set SLACK_WEBHOOK_URL, TEAMS_WEBHOOK_URL, or RESEND_API_KEY + BRIEFING_EMAIL_TO")
+    latest = json.loads((config.SITE_DATA_DIR / "latest.json").read_text(encoding="utf-8"))
+    b = latest["briefings"][0]
+    print(deliver.send(b, latest.get("alerts") or [], {"parts": {p["mpn"]: p["outlook"] for p in latest["parts"] if p.get("outlook")}}))
+
+
 def cmd_forecast(a) -> None:
     with db.open_db() as con:
         results = scoring.run(con, backtest.load_calibration())
@@ -109,8 +142,9 @@ def cmd_brief(a) -> None:
     with db.open_db() as con:
         results = scoring.run(con, backtest.load_calibration())
         outlook = predict.run(con, results)
-        b = briefing.write(con, results, use_llm=not a.no_llm, outlook=outlook)
-        export.run(con, results, outlook=outlook)
+        alerts = alerts_mod.build(con, results, outlook)
+        b = briefing.write(con, results, use_llm=not a.no_llm, outlook=outlook, alerts=alerts)
+        export.run(con, results, outlook=outlook, alerts=alerts)
         db.dump_warehouse(con)
     print(b["body_md"])
 
@@ -142,6 +176,7 @@ def main(argv=None) -> None:
     r = sub.add_parser("run", help="full pipeline: scrape -> parts -> backtest -> score -> brief -> export")
     r.add_argument("--backfill", action="store_true", help="pull multi-year history (first run)")
     r.add_argument("--no-llm", action="store_true", help="use the template writer")
+    r.add_argument("--no-deliver", action="store_true", help="don't push to Slack/Teams/email")
     r.add_argument("--skip", nargs="*", choices=list(scrapers.ALL))
     r.set_defaults(fn=cmd_run)
 
@@ -162,6 +197,12 @@ def main(argv=None) -> None:
     pt.set_defaults(fn=cmd_part)
 
     sub.add_parser("backtest").set_defaults(fn=cmd_backtest)
+    h = sub.add_parser("history", help="import customer PO/quote history CSV and backtest part models on it")
+    h.add_argument("path")
+    h.add_argument("--customer")
+    h.set_defaults(fn=cmd_history)
+
+    sub.add_parser("deliver", help="send the latest briefing to configured channels").set_defaults(fn=cmd_deliver)
     sub.add_parser("forecast", help="run the predictive layer and print forecasts + buy timing").set_defaults(fn=cmd_forecast)
 
     br = sub.add_parser("brief", help="score and write a briefing from existing data")

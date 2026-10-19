@@ -33,13 +33,14 @@ def _has_creds(p) -> bool:
 def cached(con, mpn: str, max_age_days: int | None = None) -> dict | None:
     max_age_days = config.PART_REFRESH_DAYS if max_age_days is None else max_age_days
     since = (date.today() - timedelta(days=max_age_days)).isoformat()
-    r = con.execute("SELECT * FROM part_snapshots WHERE mpn=? AND day>=? ORDER BY day DESC, "
+    r = con.execute("SELECT * FROM part_snapshots WHERE mpn=? AND day>=? AND provider!='customer' ORDER BY day DESC, "
                     "CASE provider WHEN 'octopart' THEN 0 ELSE 1 END LIMIT 1", (mpn, since)).fetchone()
     return _decode(dict(r)) if r else None
 
 
 def history(con, mpn: str) -> list[dict]:
-    return [_decode(r) for r in db.rows(con, "SELECT * FROM part_snapshots WHERE mpn=? ORDER BY day", (mpn,))]
+    return [_decode(r) for r in db.rows(con, "SELECT * FROM part_snapshots WHERE mpn=? AND provider!='customer' "
+                                             "ORDER BY day", (mpn,))]
 
 
 def _decode(r: dict) -> dict:
