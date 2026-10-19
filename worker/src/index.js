@@ -92,11 +92,28 @@ async function nexarLookup(env, mpn) {
       headers: { "content-type": "application/json", authorization: `Bearer ${nexarToken.value}` },
       body: JSON.stringify({ query, variables: { q: mpn } }),
     });
-    if (!r.ok) throw new Error(`nexar ${r.status}`);
-    return r.json();
+    // GraphQL validation errors arrive as HTTP 400 with the reason in the body
+    try { return await r.json(); } catch { throw new Error(`nexar ${r.status}`); }
   };
-  let j = await ask(NEXAR_QUERY);
-  if ((j.errors || []).some((e) => /onOrder/.test(e.message || ""))) j = await ask(NEXAR_QUERY.replace(/onOrderQuantity|onOrderEta/g, ""));
+  // Nexar's schema varies by plan: drop any field or argument it rejects and retry
+  let query = NEXAR_QUERY, j = {};
+  for (let i = 0; i < 5; i++) {
+    j = await ask(query);
+    const bad = [];
+    for (const e of j.errors || []) {
+      const m = String(e.message || "").match(/[`"](\w+)[`"] does not exist|Cannot query field [`"](\w+)[`"]/i);
+      if (m) bad.push(m[1] || m[2]);
+      const a = String(e.message || "").match(/argument [`"](\w+)[`"]/i);
+      if (a) bad.push("(" + a[1]);
+    }
+    if (!bad.length) break;
+    console.log("nexar rejected", bad.join(", "));
+    for (const n of bad) {
+      query = n.startsWith("(")
+        ? query.replace(new RegExp("\\(\\s*" + n.slice(1) + "[^)]*\\)", "g"), "")
+        : query.replace(new RegExp("\\b" + n + "\\b(\\s*\\([^()]*\\))?(\\s*\\{(?:[^{}]|\\{(?:[^{}]|\\{[^{}]*\\})*\\})*\\})?", "g"), "");
+    }
+  }
   const p = j?.data?.supSearchMpn?.results?.[0]?.part;
   if (!p) return null;
   const sellers = [];

@@ -8,6 +8,7 @@ that makes the allowance last; the free Mouser/DigiKey APIs cover the rest.
 from __future__ import annotations
 
 import logging
+import re
 import time
 
 from .. import config, db, http
@@ -109,17 +110,53 @@ class NexarProvider(PartProvider):
         return True
 
     def lookup(self, con, mpn: str) -> PartRecord | None:
-        payload = self._query(QUERY, mpn)
-        if any("onOrder" in str(e.get("message", "")) for e in payload.get("errors") or []):
-            # schema/plan without on-order fields: retry without them rather than lose the lookup
-            payload = self._query(QUERY.replace("onOrderQuantity", "").replace("onOrderEta", ""), mpn)
+        query, payload = QUERY, {}
+        for _ in range(5):           # Nexar's schema varies by plan; drop any field it rejects and retry
+            status, payload = self._query(query, mpn)
+            bad = rejected(payload)
+            if not bad:
+                break
+            log.warning("nexar rejected %s; retrying without it", ", ".join(sorted(bad)))
+            query = strip_fields(query, bad)
         if payload.get("errors"):
-            log.warning("nexar %s: %s", mpn, payload["errors"][:1])
-        rec = parse(payload, mpn)
+            log.warning("nexar %s: %s", mpn, str(payload["errors"][:1])[:300])
+        rec = parse(payload, mpn) if payload.get("data") else None
         db.record_usage(con, self.name, calls=1, parts=1 if rec else 0)
         return rec
 
-    def _query(self, query: str, mpn: str) -> dict:
-        r = http.post(GRAPHQL_URL, json={"query": query, "variables": {"q": mpn}},
-                      headers={"Authorization": f"Bearer {_get_token()}"})
-        return r.json()
+    def _query(self, query: str, mpn: str) -> tuple[int, dict]:
+        # GraphQL validation errors come back as HTTP 400 with the reason in the body, so read it
+        r = http.session().post(GRAPHQL_URL, json={"query": query, "variables": {"q": mpn}},
+                                headers={"Authorization": f"Bearer {_get_token()}"}, timeout=60)
+        try:
+            return r.status_code, r.json()
+        except ValueError:
+            r.raise_for_status()
+            return r.status_code, {}
+
+
+_FIELD = re.compile(r"[`\"](\w+)[`\"] does not exist|Cannot query field [`\"](\w+)[`\"]|[Ff]ield [`\"](\w+)[`\"] .*not", re.I)
+_ARG = re.compile(r"argument [`\"](\w+)[`\"]", re.I)
+
+
+def rejected(payload: dict) -> set[str]:
+    out = set()
+    for e in payload.get("errors") or []:
+        msg = str(e.get("message", ""))
+        m = _FIELD.search(msg)
+        if m:
+            out.add(next(g for g in m.groups() if g))
+        a = _ARG.search(msg)
+        if a:
+            out.add("(" + a.group(1))
+    return out
+
+
+def strip_fields(query: str, names: set[str]) -> str:
+    for n in names:
+        if n.startswith("("):                       # an unsupported argument: drop the whole (...) list
+            query = re.sub(r"\(\s*" + re.escape(n[1:]) + r"[^)]*\)", "", query)
+            continue
+        # the field plus any { ... } selection under it (two levels of nesting)
+        query = re.sub(r"\b" + re.escape(n) + r"\b(\s*\((?:[^()]*)\))?(\s*\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})?", "", query)
+    return query
