@@ -9,9 +9,8 @@ SITE_URL = "https://shungite-muncher.github.io/Substrate"
 GEMINI_MODEL = ""
 NEXAR_MONTHLY_PART_BUDGET = "40"
 
-# Optional: a free KV namespace makes the Nexar budget global across edge locations.
-#   npx wrangler kv namespace create BUDGET
-# then uncomment and paste the id:
-# [[kv_namespaces]]
-# binding = "BUDGET"
-# id = "<id>"
+# Free KV namespace that enforces the Nexar monthly budget across all edge locations
+# (Nexar's Evaluation allowance is a small lifetime pool, so this cap matters).
+[[kv_namespaces]]
+binding = "BUDGET"
+id = "5b86a7051f604af899c02e5a440ab552"

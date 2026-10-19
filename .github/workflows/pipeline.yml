@@ -10,6 +10,10 @@ on:
         description: "Pull multi-year history (first run)"
         type: boolean
         default: false
+      refresh_parts:
+        description: "Part numbers to re-fetch now, space-separated (uses Octopart first)"
+        type: string
+        default: ""
   push:
     branches: [main]
     paths: ["site/**", ".github/workflows/pipeline.yml"]
@@ -35,6 +39,14 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+      - name: Force-refresh selected parts
+        if: ${{ inputs.refresh_parts != '' }}
+        env:
+          NEXAR_CLIENT_ID: ${{ secrets.NEXAR_CLIENT_ID }}
+          NEXAR_CLIENT_SECRET: ${{ secrets.NEXAR_CLIENT_SECRET }}
+          MOUSER_API_KEY: ${{ secrets.MOUSER_API_KEY }}
+          PARTS: ${{ inputs.refresh_parts }}
+        run: for m in $PARTS; do python -m substrate part "$m" --force | head -3; done
       - name: Scrape, score, brief, export
         env:
           SEC_CONTACT_EMAIL: ${{ secrets.SEC_CONTACT_EMAIL }}
