@@ -182,3 +182,19 @@ def test_sia_falls_back_when_api_is_blocked(tmp_path, monkeypatch):
     r = sia.run(con)
     assert r["via"] == "rss" and r["errors"] and r["rows"] == 2
     assert con.execute("SELECT value FROM observations WHERE period='2026-08'").fetchone()[0] == 159.7
+
+
+def test_mouser_combines_duplicate_listings_and_ignores_zero_lead():
+    payload = {"SearchResults": {"Parts": [
+        {"ManufacturerPartNumber": "LM358DR", "MouserPartNumber": "595-LM358DR", "AvailabilityInStock": "65058",
+         "LeadTime": "140 Days", "AvailabilityOnOrder": [{"Quantity": 97500, "Date": "2027-03-25T00:00:00"}], "Min": "1",
+         "PriceBreaks": [{"Quantity": 1, "Price": "$0.26", "Currency": "USD"}, {"Quantity": 1000, "Price": "$0.09", "Currency": "USD"}]},
+        {"ManufacturerPartNumber": "LM358DR", "MouserPartNumber": "755-LM358DR", "AvailabilityInStock": None,
+         "LeadTime": "49 Days", "LifecycleStatus": "Not Recommended for New Designs", "AvailabilityOnOrder": [], "PriceBreaks": []},
+        {"ManufacturerPartNumber": "LM358DR2G", "AvailabilityInStock": "61836", "PriceBreaks": [{"Quantity": 1, "Price": "$0.20"}]}]}}
+    r = mouser.parse(payload, "LM358DR")
+    assert (r.total_avail, r.lead_days, r.on_order, r.on_order_eta, r.price_1, r.price_1k) == (65058, 140, 97500, "2027-03-25", 0.26, 0.09)
+    assert len(r.sellers) == 1                     # the empty placeholder listing isn't shown as a seller
+    eol = mouser.parse({"SearchResults": {"Parts": [{"ManufacturerPartNumber": "GRM188", "LeadTime": "0 Days",
+                                                      "LifecycleStatus": "End of Life", "PriceBreaks": []}]}}, "GRM188")
+    assert eol.lead_days is None and eol.lifecycle == "End of Life" and eol.total_avail is None

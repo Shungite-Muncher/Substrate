@@ -1,7 +1,7 @@
 // Shared settings + lookup logic for the popup.
 const DEFAULTS = {
   site: "https://shungite-muncher.github.io/Substrate",
-  api: "",
+  api: "https://substrate-api.substrate-v2.workers.dev",
   code: "",
 };
 

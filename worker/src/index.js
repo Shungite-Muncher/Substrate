@@ -118,21 +118,35 @@ async function mouserLookup(env, mpn) {
   });
   if (!r.ok) throw new Error(`mouser ${r.status}`);
   const parts = (await r.json())?.SearchResults?.Parts || [];
-  const p = parts.find((x) => (x.ManufacturerPartNumber || "").toUpperCase() === mpn) || parts[0];
-  if (!p) return null;
+  const exact = parts.filter((x) => (x.ManufacturerPartNumber || "").toUpperCase() === mpn);
+  // Mouser lists one MPN under several Mouser numbers, some empty: combine every exact match.
   const money = (s) => { const m = String(s || "").match(/[\d.,]+/); return m ? parseFloat(m[0].replace(/,/g, "")) : null; };
-  const stock = parseInt(String(p.AvailabilityInStock || "").replace(/,/g, ""), 10);
-  const lm = String(p.LeadTime || "").match(/(\d+)\s*(week|day)?/i);
-  const lead = lm ? (+lm[1]) * (/week/i.test(lm[2] || "") ? 7 : 1) : null;
-  const breaks = (p.PriceBreaks || []).map((b) => [+b.Quantity, money(b.Price)]);
-  const price = priceAt(breaks);
-  const oo = (p.AvailabilityOnOrder || []).filter((x) => x && typeof x === "object");
-  const onOrder = oo.reduce((a, x) => a + (parseInt(String(x.Quantity || 0).replace(/,/g, ""), 10) || 0), 0) || null;
-  const onOrderEta = oo.map((x) => String(x.Date || "").slice(0, 10)).filter(Boolean).sort()[0] || null;
+  const int = (v) => { const n = parseInt(String(v ?? "").replace(/,/g, ""), 10); return isNaN(n) ? null : n; };
+  const pool = (exact.length ? exact : parts.slice(0, 1)).map((p) => {
+    const lm = String(p.LeadTime || "").match(/(\d+)\s*(week|day)?/i);
+    const lead = lm ? (+lm[1]) * (/week/i.test(lm[2] || "") ? 7 : 1) : null;
+    const oo = (p.AvailabilityOnOrder || []).filter((x) => x && typeof x === "object");
+    return { p, breaks: (p.PriceBreaks || []).map((b) => [+b.Quantity, money(b.Price)]), stock: int(p.AvailabilityInStock),
+      lead: lead || null, onOrder: oo.reduce((a, x) => a + (int(x.Quantity) || 0), 0),
+      etas: oo.map((x) => String(x.Date || "").slice(0, 10)).filter(Boolean) };
+  });
+  if (!pool.length) return null;
+  const live = pool.filter((x) => x.breaks.length || x.stock);
+  const best = (live.length ? live : pool).reduce((a, b) => ((b.stock || 0) > (a.stock || 0) ? b : a));
+  const stocks = pool.map((x) => x.stock).filter((x) => x != null);
+  const p1 = pool.filter((x) => x.breaks.length).map((x) => priceAt(x.breaks, 1));
+  const pk = pool.filter((x) => x.breaks.length).map((x) => priceAt(x.breaks));
+  const p = best.p;
   return { mpn: p.ManufacturerPartNumber || mpn, provider: "mouser", manufacturer: p.Manufacturer, description: p.Description,
-    category: p.Category, total_avail: isNaN(stock) ? null : stock, lead_days: lead, price_1k: price, lifecycle: p.LifecycleStatus,
-    price_1: priceAt(breaks, 1), on_order: onOrder, on_order_eta: onOrderEta,
-    url: p.ProductDetailUrl, sellers: [{ seller: "Mouser", stock: isNaN(stock) ? null : stock, lead_days: lead, price_1k: price }],
+    category: p.Category, total_avail: stocks.length ? stocks.reduce((a, b) => a + b, 0) : null,
+    lead_days: best.lead || (live.find((x) => x.lead) || {}).lead || null,
+    price_1k: pk.length ? Math.min(...pk) : null, price_1: p1.length ? Math.min(...p1) : null,
+    lifecycle: p.LifecycleStatus || (pool.find((x) => x.p.LifecycleStatus) || {}).p?.LifecycleStatus || null,
+    on_order: pool.reduce((a, x) => a + x.onOrder, 0) || null, on_order_eta: pool.flatMap((x) => x.etas).sort()[0] || null,
+    url: p.ProductDetailUrl,
+    sellers: (live.length ? live : pool).map((x) => ({ seller: `Mouser (${x.p.MouserPartNumber || "listing"})`, stock: x.stock,
+      lead_days: x.lead, on_order: x.onOrder || null, on_order_eta: x.etas.sort()[0] || null,
+      price_1k: x.breaks.length ? priceAt(x.breaks) : null })),
     day: new Date().toISOString().slice(0, 10) };
 }
 
@@ -151,7 +165,7 @@ async function nexarBudgetAdd(env) {
 
 async function liveLookup(env, mpn, ctx) {
   const cache = caches.default;
-  const key = new Request(`https://substrate-cache.internal/part/${encodeURIComponent(mpn)}`);
+  const key = new Request(`https://substrate-cache.internal/v2/part/${encodeURIComponent(mpn)}`);
   const hit = await cache.match(key);
   if (hit) return hit.json();
   let snap = null;
