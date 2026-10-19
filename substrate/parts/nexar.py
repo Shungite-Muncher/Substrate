@@ -40,7 +40,6 @@ query SubstratePart($q: String!) {
             inventoryLevel
             factoryLeadDays
             onOrderQuantity
-            onOrderEta
             moq
             prices { quantity price currency }
           }
@@ -121,6 +120,11 @@ class NexarProvider(PartProvider):
         if payload.get("errors"):
             log.warning("nexar %s: %s", mpn, str(payload["errors"][:1])[:300])
         rec = parse(payload, mpn) if payload.get("data") else None
+        if rec is None and "#" in mpn:       # e.g. LTC3780EGN#PBF: packaging suffixes often aren't indexed
+            _, payload = self._query(query, mpn.split("#")[0])
+            rec = parse(payload, mpn) if payload.get("data") else None
+            if rec:
+                rec.mpn = mpn
         db.record_usage(con, self.name, calls=1, parts=1 if rec else 0)
         return rec
 

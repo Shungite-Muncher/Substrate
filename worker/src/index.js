@@ -27,7 +27,7 @@ const NEXAR_QUERY = `query SubstratePart($q: String!) {
   supSearchMpn(q: $q, limit: 1) { results { part {
     mpn manufacturer { name } shortDescription category { name path } octopartUrl totalAvail
     estimatedFactoryLeadDays medianPrice1000 { price currency }
-    sellers(authorizedOnly: true) { company { name } offers { inventoryLevel factoryLeadDays onOrderQuantity onOrderEta moq prices { quantity price currency } } }
+    sellers(authorizedOnly: true) { company { name } offers { inventoryLevel factoryLeadDays onOrderQuantity moq prices { quantity price currency } } }
   } } }
 }`;
 
@@ -114,7 +114,13 @@ async function nexarLookup(env, mpn) {
         : query.replace(new RegExp("\\b" + n + "\\b(\\s*\\([^()]*\\))?(\\s*\\{(?:[^{}]|\\{(?:[^{}]|\\{[^{}]*\\})*\\})*\\})?", "g"), "");
     }
   }
-  const p = j?.data?.supSearchMpn?.results?.[0]?.part;
+  let p = j?.data?.supSearchMpn?.results?.[0]?.part;
+  if (!p && mpn.includes("#")) {        // e.g. LTC3780EGN#PBF: packaging suffixes often aren't indexed
+    const r2 = await fetch("https://api.nexar.com/graphql/", { method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${nexarToken.value}` },
+      body: JSON.stringify({ query, variables: { q: mpn.split("#")[0] } }) });
+    p = (await r2.json().catch(() => ({})))?.data?.supSearchMpn?.results?.[0]?.part;
+  }
   if (!p) return null;
   const sellers = [];
   for (const s of p.sellers || []) for (const o of s.offers || []) {
