@@ -14,6 +14,8 @@ price trend higher = rising) and their BOM. Rules:
 - Be concrete: numbers, part numbers, what to ask the supplier for, and fallback positions.
 - For negotiation briefs use sections: Situation, Leverage (ours / theirs), Asks, Walk-away & alternatives, Talking points.
 - For scenario questions ("what if lead times hit 30 weeks"), reason explicitly from the scoring inputs.
+- Glossary: PBO = on-order / backorder quantity: units the distributor has on order from the manufacturer, with the next expected arrival date. Lead time = factory lead time. Price = unit price at qty 1 and at 1k.
+- When a live part lookup is provided, open with that part's lead time (in weeks), PBO (quantity and next arrival date), stock and current price (qty 1 and 1k), quoting the numbers exactly, then the brief.
 - Keep answers under 350 words unless asked for more. Markdown."""
 
 
@@ -24,7 +26,7 @@ def load_context() -> dict:
         return {}
 
 
-def compact_context(ctx: dict, question: str, budget: int = llm.MAX_PROMPT_CHARS - 5000) -> str:
+def compact_context(ctx: dict, question: str, budget: int = 7000) -> str:
     """Fit the context into the free-tier token budget: parts named in the question
     stay in full; the rest of the BOM and the briefing shrink first."""
     q = question.upper()
@@ -96,6 +98,17 @@ def fallback_answer(ctx: dict, question: str) -> str:
     return "\n".join(lines)
 
 
+def part_facts(part: dict) -> dict:
+    """The numbers a buyer asks for first, ahead of any scoring detail (keeps them inside the prompt budget)."""
+    s = part.get("snapshot") or {}
+    return {"mpn": part.get("mpn"), "found": part.get("found"), "data_source": s.get("provider"), "data_date": s.get("day"),
+            "lead_time_weeks": round(s["lead_days"] / 7) if s.get("lead_days") else None, "stock": s.get("total_avail"),
+            "pbo_on_order_qty": s.get("on_order"), "pbo_next_arrival": s.get("on_order_eta"),
+            "price_qty1_usd": s.get("price_1"), "price_1k_usd": s.get("price_1k"), "lifecycle": s.get("lifecycle"),
+            "segment": part.get("segment"), "supply_risk": part.get("supply_risk"), "price_trend": part.get("price_trend"),
+            "top_drivers": [x["evidence"] for x in (part.get("signals") or [])[:3]]}
+
+
 def answer(messages: list[dict], part: dict | None = None) -> dict:
     ctx = load_context()
     question = messages[-1]["content"] if messages else ""
@@ -103,7 +116,7 @@ def answer(messages: list[dict], part: dict | None = None) -> dict:
         return {"reply": fallback_answer(ctx, question), "model": "template"}
     convo = "\n".join(f"{m['role'].upper()}: {m['content'][:1500]}" for m in messages[-6:])
     prompt = (f"Customer market context (JSON):\n{compact_context(ctx, question)}\n\n"
-              + (f"Live part lookup:\n{json.dumps(part, separators=(',', ':'))[:2500]}\n\n" if part else "")
+              + (f"Live part lookup:\n{json.dumps(part_facts(part), separators=(',', ':'))}\n\n" if part else "")
               + f"Conversation:\n{convo}\n\nAnswer the last USER message.")
     try:
         text, model = llm.generate(prompt, system=SYSTEM, lite=True, temperature=0.4)

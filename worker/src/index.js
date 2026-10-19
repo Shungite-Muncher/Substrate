@@ -19,6 +19,8 @@ price trend higher = rising) and their BOM. Rules:
 - Be concrete: numbers, part numbers, what to ask the supplier for, and fallback positions.
 - For negotiation briefs use sections: Situation, Leverage (ours / theirs), Asks, Walk-away & alternatives, Talking points.
 - For scenario questions ("what if lead times hit 30 weeks"), reason explicitly from the scoring inputs.
+- Glossary: PBO = on-order / backorder quantity: units the distributor has on order from the manufacturer, with the next expected arrival date. Lead time = factory lead time. Price = unit price at qty 1 and at 1k.
+- When a live part lookup is provided, open with that part's lead time (in weeks), PBO (quantity and next arrival date), stock and current price (qty 1 and 1k), quoting the numbers exactly, then the brief.
 - Keep answers under 350 words unless asked for more. Markdown.`;
 
 const NEXAR_QUERY = `query SubstratePart($q: String!) {
@@ -232,7 +234,7 @@ async function handlePart(env, url, ctx) {
 // Groq free tier: 30 req/min, 1K req/day, 8K tokens/min, so prompts stay compact.
 async function groq(env, prompt) {
   const model = env.GROQ_MODEL || "openai/gpt-oss-120b";
-  const body = { model, temperature: 0.4, max_completion_tokens: 1500,
+  const body = { model, temperature: 0.4, max_completion_tokens: 1100,
     messages: [{ role: "system", content: SYSTEM }, { role: "user", content: prompt }] };
   if (model.includes("gpt-oss")) Object.assign(body, { reasoning_effort: "low", include_reasoning: false });
   const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -255,9 +257,9 @@ function compactContext(ctx, question) {
     if (level >= 2) { c.headlines = (ctx.headlines || []).slice(0, 6).map((h) => h.title); delete c.peer_inventory_days; }
     if (level >= 3) c.latest_briefing = c.latest_briefing.slice(0, 600);
     const out = JSON.stringify({ ...c, bom });
-    if (out.length <= 11000) return out;
+    if (out.length <= 7000) return out;
   }
-  return JSON.stringify({ ...c, bom: [] }).slice(0, 11000);
+  return JSON.stringify({ ...c, bom: [] }).slice(0, 7000);
 }
 
 async function gemini(env, prompt) {
@@ -273,6 +275,20 @@ async function gemini(env, prompt) {
   const text = (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
   if (!text.trim()) throw new Error("empty response");
   return { reply: text, model };
+}
+
+// The numbers a buyer asks for first, ahead of any scoring detail (keeps them inside the prompt budget).
+function partFacts(part) {
+  const s = part.snapshot || {};
+  return {
+    mpn: part.mpn, found: part.found, data_source: s.provider || part.source, data_date: s.day || s.data_day,
+    lead_time_weeks: s.lead_days ? Math.round(s.lead_days / 7) : null, stock: s.total_avail ?? null,
+    pbo_on_order_qty: s.on_order ?? null, pbo_next_arrival: s.on_order_eta ?? null,
+    price_qty1_usd: s.price_1 ?? null, price_1k_usd: s.price_1k ?? null, lifecycle: s.lifecycle ?? null,
+    segment: part.segment, supply_risk: part.supply_risk, price_trend: part.price_trend,
+    outlook: s.outlook ? { action: s.outlook.action, why: s.outlook.why } : undefined,
+    top_drivers: (part.signals || []).slice(0, 3).map((x) => x.evidence),
+  };
 }
 
 async function handleChat(env, request, ctx) {
@@ -291,7 +307,7 @@ async function handleChat(env, request, ctx) {
   }
   const convo = msgs.slice(-6).map((m) => `${m.role.toUpperCase()}: ${m.content.slice(0, 1500)}`).join("\n");
   const prompt = `Customer market context (JSON):\n${compactContext(context, msgs[msgs.length - 1].content)}\n\n` +
-    (part ? `Live part lookup:\n${JSON.stringify(part).slice(0, 2500)}\n\n` : "") +
+    (part ? `Live part lookup:\n${JSON.stringify(partFacts(part))}\n\n` : "") +
     `Conversation:\n${convo}\n\nAnswer the last USER message.`;
   if (env.GROQ_API_KEY) {
     try { return json(await groq(env, prompt)); } catch (e) { if (!env.GEMINI_API_KEY) throw e; }
