@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from . import alerts as alerts_mod
 from . import config, db, parts, signals
 from . import history as customer_history
 from .segments import COMPANY_NAMES, SEGMENTS
@@ -27,6 +28,8 @@ def _part_view(p: dict) -> dict:
         "lead_days": snap.get("lead_days"), "total_avail": snap.get("total_avail"), "price_1k": snap.get("price_1k"),
         "price_1": snap.get("price_1"), "on_order": snap.get("on_order"), "on_order_eta": snap.get("on_order_eta"),
         "lifecycle": snap.get("lifecycle"), "provider": snap.get("provider"), "data_day": snap.get("day"),
+        **{k: snap.get(k) for k in ("country_of_origin", "fab_country", "assembly_country", "us_hts", "eccn",
+                                    "tariff_note", "tariff_pct", "notice")},
         "url": snap.get("url"), "sellers": (snap.get("sellers") or [])[:8],
         "annual_qty": (p.get("bom") or {}).get("annual_qty"), "target_price": (p.get("bom") or {}).get("target_price"),
         "price_vs_target_pct": p.get("price_vs_target_pct"), "history": p.get("history", []),
@@ -78,6 +81,7 @@ def run(con, results: dict, backtest_report: dict | None = None, outlook: dict |
         "model": {"baseline_lead_days": signals.BASELINE_LEAD_DAYS},
         "backtest": {k: v for k, v in (backtest_report or {}).items() if k != "series"} or None,
         "alerts": alerts or [],
+        "watch": alerts_mod.watchlist(con),
         "outlook": None if not o else {
             "generated": o["generated"],
             "forecasts": {k: {kk: vv for kk, vv in f.items() if kk != "history"} for k, f in o["forecasts"].items()},
@@ -108,6 +112,7 @@ def run(con, results: dict, backtest_report: dict | None = None, outlook: dict |
                  "price_trend": p["price_trend"], "lead_weeks": round(p["lead_days"] / 7, 1) if p["lead_days"] else None,
                  "stock": p["total_avail"], "price_1k": p["price_1k"], "price_1": p["price_1"],
                  "on_order_pbo": p["on_order"], "on_order_eta": p["on_order_eta"], "target_price": p["target_price"],
+                 "origin": p["country_of_origin"], "tariff": p["tariff_note"],
                  "annual_qty": p["annual_qty"], "drivers": [s["evidence"] for s in p["signals"][:3]]}
                 for p in part_views.values()],
         "peer_inventory_days": {t: v for t, v in inventory.items() if t in config.CUSTOMER_PEERS},

@@ -23,9 +23,9 @@ const charts = {};
 // ---------- color + widgets -------------------------------------------------
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 function riskColor(v) {
-  if (v >= 62) return css("--risk-hi");
-  if (v >= 54) return css("--risk-mid");
-  if (v <= 46) return css("--risk-lo");
+  if (v >= 70) return css("--risk-hi");
+  if (v >= 58) return css("--risk-mid");
+  if (v <= 42) return css("--risk-lo");
   return "#6b7280";
 }
 const badge = (v) => `<span class="badge" style="background:${riskColor(v)}">${fmt(v)}</span>`;
@@ -130,11 +130,18 @@ function drawMarketCharts() {
 
 // ---------- BOM ---------------------------------------------------------------
 let bomSort = { key: "supply_risk", dir: -1 };
+function renderWatch() {
+  const w = DATA.watch, host = $("#watch");
+  if (!w || !host) return;
+  const list = (xs, empty) => xs.length ? `<ul>${xs.map((x) => `<li>${esc(x.title)}${x.detail ? ` <small>${esc(x.detail)}</small>` : ""}</li>`).join("")}</ul>` : `<p class="hint" style="margin:.3rem 0 0">${empty}</p>`;
+  host.innerHTML = `<div class="card ease"><h3>Easing</h3>${list(w.easing, "Nothing easing yet. Lead-time changes appear once parts have two snapshots a few days apart.")}</div>
+    <div class="card worse"><h3>Worsening or exposed</h3>${list(w.worsening, "No lead-time jumps, slipped PBO dates or tariff surcharges.")}</div>`;
+}
 function renderBom(parts = DATA.parts) {
   $("#bom-customer").textContent = `· ${DATA.customer}`;
   const cols = [
     ["mpn", "Part"], ["segment", "Segment"], ["supply_risk", "Supply risk"], ["price_trend", "Price trend"],
-    ["confidence", "Conf."], ["lead_days", "Lead (wk)"], ["total_avail", "Stock"], ["on_order", "PBO"], ["price_1k", "1k price"], ["price_vs_target_pct", "vs target"],
+    ["confidence", "Conf."], ["lead_days", "Lead (wk)"], ["total_avail", "Stock"], ["on_order", "PBO"], ["country_of_origin", "Origin"], ["price_1k", "1k price"], ["price_vs_target_pct", "vs target"],
   ];
   const sorted = [...parts].sort((a, b) => ((a[bomSort.key] ?? -1e9) > (b[bomSort.key] ?? -1e9) ? 1 : -1) * bomSort.dir);
   $("#bom-table").innerHTML = `<thead><tr>${cols.map(([k, l]) => `<th data-k="${k}">${l}${bomSort.key === k ? (bomSort.dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr></thead><tbody>` +
@@ -144,6 +151,7 @@ function renderBom(parts = DATA.parts) {
       <td>${badge(p.price_trend)} <small>${esc(p.labels.price)}</small></td><td class="num">${fmt(p.confidence)}</td>
       <td class="num">${p.lead_days ? fmt(p.lead_days / 7) : "–"}</td><td class="num">${fmt(p.total_avail)}</td>
       <td class="num">${fmt(p.on_order)}</td>
+      <td>${esc(p.country_of_origin || "–")}${p.tariff_pct ? ` <span class="badge" style="background:${css("--risk-hi")}">${fmt(p.tariff_pct)}%</span>` : ""}</td>
       <td class="num">${p.price_1k ? "$" + fmt(p.price_1k, 3) : "–"}</td>
       <td class="num" style="color:${(p.price_vs_target_pct || 0) > 0 ? css("--pos") : css("--neg")}">${p.price_vs_target_pct != null ? (p.price_vs_target_pct > 0 ? "+" : "") + fmt(p.price_vs_target_pct, 1) + "%" : "–"}</td></tr>`).join("") + "</tbody>";
   $$("#bom-table th").forEach((th) => th.addEventListener("click", () => {
@@ -164,7 +172,7 @@ function scenarioScore(p, leadWeeks, stock) {
   const sup = p.signals.filter((s) => s.component === "supply" && !["Factory lead time", "Channel inventory cover"].includes(s.name));
   const extra = [];
   const base = DATA.model?.baseline_lead_days ?? 84;
-  if (leadWeeks != null) extra.push({ w: 0.30, n: Math.tanh((leadWeeks * 7 - base) / 60) });
+  if (leadWeeks != null) extra.push({ w: 0.30, n: Math.tanh((leadWeeks * 7 - base) / 90) });
   if (stock != null) {
     const n = p.annual_qty ? Math.tanh((8 - stock / (p.annual_qty / 52)) / 8) : Math.tanh((4 - Math.log10(stock + 1)) / 1.5);
     extra.push({ w: 0.20, n });
@@ -199,6 +207,12 @@ function renderPartDetail(p, host) {
       <div><span>Annual usage</span><b>${fmt(p.annual_qty)}</b></div>
       <div><span>Data</span><b>${esc(p.provider || "none")} ${esc(p.data_day || "")}</b></div>
     </div>
+    ${p.country_of_origin || p.us_hts || p.tariff_note || p.notice ? `<div class="kv">
+      <div><span>Country of origin</span><b>${esc(p.country_of_origin || "–")}</b></div>
+      <div><span>Wafer fab / assembly</span><b>${esc(p.fab_country || "–")} / ${esc(p.assembly_country || "–")}</b></div>
+      <div><span>US HTS / ECCN</span><b class="mono">${esc(p.us_hts || "–")} · ${esc(p.eccn || "–")}</b></div>
+      <div style="${p.tariff_pct ? "background:var(--accent-soft)" : ""}"><span>Tariff</span><b style="color:${p.tariff_pct ? css("--risk-hi") : "inherit"}">${p.tariff_pct ? fmt(p.tariff_pct) + "% surcharge" : "none reported"}</b></div>
+    </div>${p.tariff_note || p.notice ? `<p class="hint">${esc([p.tariff_note, p.notice].filter(Boolean).join(" "))}</p>` : ""}` : ""}
     ${p.outlook ? `<div class="scenario"><b>3-month outlook</b> ${actBadge(p.outlook.action)}
       <div style="margin-top:.4rem">${pct(p.outlook.p_price_up)} chance prices rise · ${pct(p.outlook.p_supply_tighter)} chance supply tightens${
         p.outlook.lead_projection ? ` · lead time ${fmt(p.outlook.lead_projection.now_weeks)} → ${fmt(p.outlook.lead_projection.in_13w_weeks)} wk projected` : ""}</div>
@@ -537,6 +551,7 @@ $("#set-save").addEventListener("click", () => {
   renderMarket();
   renderOutlook();
   renderBom();
+  renderWatch();
   renderChips();
   const params = new URLSearchParams(location.search);
   if (params.get("part")) {

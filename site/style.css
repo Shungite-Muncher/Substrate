@@ -150,6 +150,12 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
   .inline-form, .chat-form { flex-direction: column; }
 }
 
+.watch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+@media (max-width: 760px) { .watch { grid-template-columns: 1fr; } }
+.watch .card { margin: 0; }
+.watch ul { margin: .3rem 0 0; padding-left: 1.1rem; font-size: .86rem; } .watch li { margin: .25rem 0; }
+.watch .ease { border-left: 3px solid var(--risk-lo); } .watch .worse { border-left: 3px solid var(--risk-hi); }
+.watch small { color: var(--muted); }
 .alerts { border-left: 3px solid var(--risk-hi); }
 .alerts li { margin: .25rem 0; }
 .alerts .k { display: inline-block; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;

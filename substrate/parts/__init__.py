@@ -35,7 +35,19 @@ def cached(con, mpn: str, max_age_days: int | None = None) -> dict | None:
     since = (date.today() - timedelta(days=max_age_days)).isoformat()
     r = con.execute("SELECT * FROM part_snapshots WHERE mpn=? AND day>=? AND provider!='customer' ORDER BY day DESC, "
                     "CASE provider WHEN 'octopart' THEN 0 ELSE 1 END LIMIT 1", (mpn, since)).fetchone()
-    return _decode(dict(r)) if r else None
+    if not r:
+        return None
+    snap = _decode(dict(r))
+    if not snap.get("country_of_origin"):
+        t = con.execute("SELECT * FROM part_snapshots WHERE mpn=? AND provider!='customer' AND country_of_origin IS NOT NULL "
+                        "ORDER BY day DESC LIMIT 1", (mpn,)).fetchone()
+        if t:
+            for k in TRADE_FIELDS:
+                snap[k] = snap.get(k) or t[k]
+    return snap
+
+
+TRADE_FIELDS = ("country_of_origin", "fab_country", "assembly_country", "us_hts", "eccn", "tariff_note", "tariff_pct", "notice")
 
 
 def history(con, mpn: str) -> list[dict]:
@@ -55,6 +67,9 @@ def lookup(con, mpn: str, *, force: bool = False) -> dict | None:
         hit = cached(con, mpn)
         if hit:
             return hit
+    # Ask every available source and keep each snapshot: Octopart aggregates sellers, while Mouser
+    # alone reports PBO arrival dates, country of origin and tariff surcharges.
+    got = False
     for p in PROVIDERS:
         if not p.available(con):
             continue
@@ -67,7 +82,9 @@ def lookup(con, mpn: str, *, force: bool = False) -> dict | None:
             row = rec.to_row(date.today().isoformat())
             row["mpn"] = mpn  # key on the BOM's spelling
             db.upsert(con, "part_snapshots", row)
-            return _decode(dict(row))
+            got = True
+    if got:
+        return cached(con, mpn, max_age_days=0)   # merged view: preferred source + trade fields
     return cached(con, mpn, max_age_days=3650)  # fall back to the last thing we ever saw
 
 

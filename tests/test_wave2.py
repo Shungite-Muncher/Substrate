@@ -118,3 +118,30 @@ def test_customer_history_backtests_immediately(con):
     assert st["lead"]["status"] in ("promoted", "heuristic") and st["lead"]["sources"] == ["customer"]
     assert st["pbo"]["status"] == "accumulating"                 # PO history carries no backlog data
     assert parts_model.run(con)["latest"] == {}                   # live predictions never use customer rows
+
+
+def test_part_movement_alerts_and_relief(con):
+    for day, lead, stock, oo, eta, tariff in [("2026-10-01", 182, 0, 5000, "2026-11-01", None),
+                                              ("2026-10-08", 140, 1200, 1000, "2026-11-20", 38.0)]:
+        db.upsert(con, "part_snapshots", {"mpn": "A", "provider": "mouser", "day": day, "lead_days": lead, "total_avail": stock,
+                                          "on_order": oo, "on_order_eta": eta, "tariff_pct": tariff,
+                                          "tariff_note": "A tariff of 38% may be applied" if tariff else None})
+    kinds = {c["kind"]: c for c in alerts.part_changes(con, ["A"])}
+    assert set(kinds) == {"lead time easing", "back in stock", "backorder easing", "PBO delayed", "tariff added"}
+    assert kinds["lead time easing"]["title"] == "A: lead time 26 → 20 weeks"
+    db.upsert(con, "part_snapshots", {"mpn": "B", "provider": "mouser", "day": date.today().isoformat(), "total_avail": 0,
+                                      "on_order": 900, "on_order_eta": (date.today() + timedelta(days=10)).isoformat()})
+    r = alerts.relief_due(con, ["B"], {"B": 52000})
+    assert len(r) == 1 and r[0]["kind"] == "backorder relief due"
+
+
+def test_mouser_trade_fields():
+    from substrate.parts import mouser
+    r = mouser.parse({"SearchResults": {"Parts": [{"ManufacturerPartNumber": "C3M0065090D", "AvailabilityInStock": "0",
+        "SurchargeMessages": [{"code": "TARIFF_US", "message": "A tariff of 38% may be applied if shipping to the United States."}],
+        "TradeCompliance": [{"ComplianceName": "Country of Origin", "ComplianceValue": "China"},
+                            {"ComplianceName": "Assembly Country of Origin", "ComplianceValue": "Not available"}],
+        "ProductCompliance": [{"ComplianceName": "USHTS", "ComplianceValue": "8541290065"}, {"ComplianceName": "ECCN", "ComplianceValue": "EAR99"}],
+        "InfoMessages": ["Mouser does not presently sell this product in your region."]}]}}, "C3M0065090D")
+    assert (r.country_of_origin, r.assembly_country, r.us_hts, r.eccn, r.tariff_pct) == ("China", None, "8541290065", "EAR99", 38.0)
+    assert "region" in r.notice

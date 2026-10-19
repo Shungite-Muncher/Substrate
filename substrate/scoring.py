@@ -50,13 +50,14 @@ def component(sigs: list[signals.Signal], comp: str, scope: str) -> dict:
 
 
 def supply_label(s: float) -> str:
-    return ("Severe" if s >= 75 else "Elevated" if s >= 62 else "Rising" if s >= 54 else
-            "Neutral" if s > 46 else "Easing" if s > 38 else "Low")
+    # "Severe" needs nearly every input pointing hard the same way
+    return ("Severe" if s >= 85 else "Elevated" if s >= 70 else "Rising" if s >= 58 else
+            "Neutral" if s > 42 else "Easing" if s > 30 else "Low")
 
 
 def price_label(s: float) -> str:
-    return ("Rising fast" if s >= 72 else "Rising" if s >= 60 else "Firming" if s >= 53 else
-            "Flat" if s > 47 else "Softening" if s > 40 else "Falling")
+    return ("Rising fast" if s >= 85 else "Rising" if s >= 68 else "Firming" if s >= 57 else
+            "Flat" if s > 43 else "Softening" if s > 32 else "Falling")
 
 
 def confidence_label(c: float) -> str:

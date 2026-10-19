@@ -31,6 +31,15 @@ class PartRecord:
     on_order_eta: str | None = None    # earliest expected arrival of on-order stock
     currency: str | None = "USD"
     lifecycle: str | None = None
+    # trade & tariff
+    country_of_origin: str | None = None
+    fab_country: str | None = None        # "country of diffusion": where the wafer was made
+    assembly_country: str | None = None
+    us_hts: str | None = None             # US tariff classification (8541 discretes, 8542 ICs)
+    eccn: str | None = None               # US export-control classification
+    tariff_note: str | None = None        # distributor's tariff surcharge notice
+    tariff_pct: float | None = None
+    notice: str | None = None             # e.g. "not sold in your region"
     url: str | None = None
     sellers: list[Offer] = field(default_factory=list)
 

@@ -1,6 +1,8 @@
 """Mouser Search API (free key, ~1,000 calls/day). Fallback for lead time / stock / price."""
 from __future__ import annotations
 
+import re
+
 from .. import config, db, http
 from .base import Offer, PartProvider, PartRecord, earliest, parse_lead_days, parse_money, price_at
 
@@ -22,6 +24,20 @@ def _listing(p: dict) -> dict:
     return {"p": p, "breaks": breaks, "stock": _int(p.get("AvailabilityInStock")),
             "lead": lead if lead else None,            # Mouser says "0 Days" for parts it no longer carries
             "on_order": sum(_int(x.get("Quantity")) or 0 for x in oo), "etas": [x.get("Date") for x in oo]}
+
+
+def trade(p: dict) -> dict:
+    """Origin, classification and tariff surcharge from one Mouser listing."""
+    tc = {x.get("ComplianceName"): x.get("ComplianceValue") for x in p.get("TradeCompliance") or []}
+    pc = {x.get("ComplianceName"): x.get("ComplianceValue") for x in p.get("ProductCompliance") or []}
+    clean = lambda v: None if not v or str(v).strip().lower() in ("not available", "none", "") else str(v).strip()
+    notes = [m.get("message") for m in p.get("SurchargeMessages") or [] if isinstance(m, dict) and m.get("message")]
+    pcts = [float(x) for n in notes for x in re.findall(r"(\d+(?:\.\d+)?)\s*%", n)]
+    info = [m for m in p.get("InfoMessages") or [] if m]
+    return {"country_of_origin": clean(tc.get("Country of Origin")), "fab_country": clean(tc.get("Country of Diffusion")),
+            "assembly_country": clean(tc.get("Assembly Country of Origin")), "us_hts": clean(pc.get("USHTS")),
+            "eccn": clean(pc.get("ECCN")), "tariff_note": " ".join(notes) or None,
+            "tariff_pct": max(pcts) if pcts else None, "notice": " ".join(info) or None}
 
 
 def parse(payload: dict, mpn: str) -> PartRecord | None:
@@ -46,7 +62,12 @@ def parse(payload: dict, mpn: str) -> PartRecord | None:
     price = min(pk) if pk else None
     currency = (p.get("PriceBreaks") or [{}])[0].get("Currency", "USD") if p.get("PriceBreaks") else "USD"
     lifecycle = p.get("LifecycleStatus") or next((x["p"].get("LifecycleStatus") for x in pool if x["p"].get("LifecycleStatus")), None)
+    tr = trade(p)
+    for x in pool:                        # take any field the chosen listing leaves blank from a sibling
+        for k, v in trade(x["p"]).items():
+            tr[k] = tr[k] or v
     return PartRecord(
+        **tr,
         mpn=p.get("ManufacturerPartNumber") or mpn, provider="mouser",
         manufacturer=p.get("Manufacturer"), description=p.get("Description"), category=p.get("Category"),
         total_avail=stock, lead_days=lead, price_1k=price, price_1=min(p1) if p1 else None,

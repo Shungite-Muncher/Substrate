@@ -25,6 +25,8 @@ SCHEMA = {
         mpn TEXT, provider TEXT, day TEXT, manufacturer TEXT, description TEXT, category TEXT,
         total_avail INTEGER, lead_days REAL, price_1k REAL, currency TEXT, lifecycle TEXT,
         sellers TEXT, url TEXT, price_1 REAL, on_order INTEGER, on_order_eta TEXT,
+        country_of_origin TEXT, fab_country TEXT, assembly_country TEXT, us_hts TEXT, eccn TEXT,
+        tariff_note TEXT, tariff_pct REAL, notice TEXT,
         PRIMARY KEY (mpn, provider, day)""",
     "bom": """
         customer TEXT, mpn TEXT, manufacturer TEXT, description TEXT, segment TEXT,

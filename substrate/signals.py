@@ -27,6 +27,7 @@ HALF_LIFE_DAYS = {"FRED": 45, "TSMC": 40, "SIA": 60, "SEC": 120, "Trade press": 
                   "Octopart": 7, "Part history": 14, "Part data": 7, "Census": 60, "FX": 30, "Korea customs": 20,
                   "Federal Register": 45, "MOPS": 40, "DRAMeXchange": 7, "USGS": 7}
 SEC_FILINGS = ("sec-8k", "sec-10q")
+TONE_DAMPING = 0.6   # headline tone is a count ratio (often +/-1); count it at 60%
 NON_PRESS = SEC_FILINGS + ("fedreg", "usgs")
 
 
@@ -63,14 +64,14 @@ def utilization_level(cu: list[tuple[str, float]], window: int = 120) -> tuple[f
     hist = [v for _, v in cu[-window:]]
     mu, sd = statistics.fmean(hist), statistics.pstdev(hist) or 1.0
     latest = cu[-1][1]
-    return _t((latest - mu) / sd, 1.5), latest, mu
+    return _t((latest - mu) / sd, 2.0), latest, mu
 
 
 def utilization_momentum(cu: list[tuple[str, float]]) -> tuple[float, float] | None:
     if len(cu) < 4:
         return None
     d = cu[-1][1] - cu[-4][1]
-    return _t(d, 2.0), d
+    return _t(d, 3.0), d
 
 
 def yoy_growth(series: list[tuple[str, float]], months: int = 3) -> float | None:
@@ -95,7 +96,7 @@ def tsmc_momentum(rev: list[tuple[str, float]]) -> tuple[float, float, float] | 
     hist = [yoy_growth(rev[:i]) for i in range(max(15, len(rev) - 60), len(rev))]
     hist = [h for h in hist if h is not None]
     base = statistics.median(hist) if len(hist) >= 12 else 10.0
-    return _t(g - base, 20.0), g, base
+    return _t(g - base, 35.0), g, base
 
 
 def sales_growth(sia: list[tuple[str, float]]) -> tuple[float, float] | None:
@@ -107,7 +108,7 @@ def sales_growth(sia: list[tuple[str, float]]) -> tuple[float, float] | None:
     if prev not in m:
         return None
     g = (sia[-1][1] / m[prev] - 1) * 100
-    return _t(g - 8.0, 25.0), g   # ~8%/yr is the industry's long-run growth rate
+    return _t(g - 8.0, 60.0), g   # ~8%/yr is the industry's long-run growth rate
 
 
 def ppi_momentum(ppi: list[tuple[str, float]]) -> tuple[float, float] | None:
@@ -117,7 +118,7 @@ def ppi_momentum(ppi: list[tuple[str, float]]) -> tuple[float, float] | None:
         return None
     a, b = ppi[-1][1], ppi[-4][1]
     ann = ((a / b) ** 4 - 1) * 100 if b else 0.0
-    return _t(ann, 5.0), ann
+    return _t(ann, 10.0), ann
 
 
 def truncate(series: list[tuple[str, float]], as_of: date, lag_months: int) -> list[tuple[str, float]]:
@@ -225,7 +226,7 @@ def inventory_signal(con, tickers: list[str], label: str, weight_supply: float, 
         latest_q, latest = dio[-1]
         base = statistics.fmean(v for _, v in dio[-9:-1])
         chg = latest / base - 1
-        parts.append(_t(-chg, 0.15))
+        parts.append(_t(-chg, 0.25))
         notes.append(f"{COMPANY_NAMES.get(t, t)} {latest:.0f} days ({chg:+.0%} vs 2-yr avg, {latest_q})")
         ages.append(_quarter_age(latest_q))
     if not parts:
@@ -273,7 +274,7 @@ def document_signals(con, segment: str | None, source_kind: str) -> list[Signal]
         ev = (f"{len(toned)} {'stories' if source_kind != 'sec-8k' else 'releases'} in {horizon} days, net "
               f"{'tightening' if comp == 'supply' and mean > 0 else 'easing' if comp == 'supply' else 'up' if mean > 0 else 'down'}"
               f" ({mean:+.2f}). e.g. " + " | ".join(f"“{d['title'][:90]}”" for d, _ in top))
-        out.append(Signal(name, src, comp, mean * shrink, base_w if source_kind != "sec-8k" else 0.10, ev,
+        out.append(Signal(name, src, comp, mean * shrink * TONE_DAMPING, base_w if source_kind != "sec-8k" else 0.10, ev,
                           raw=mean, url=top[0][0]["url"], age_days=statistics.fmean(a for _, a in toned)))
     return out
 
@@ -317,14 +318,14 @@ def extra_macro_signals(con) -> list[Signal]:
     months = sorted(set(no) & set(sh))
     if len(months) >= 3:
         btb = statistics.fmean(no[m] / sh[m] for m in months[-3:])
-        out.append(Signal("Component book-to-bill", "Census", "supply", _t(btb - 1, 0.05), 0.10,
+        out.append(Signal("Component book-to-bill", "Census", "supply", _t(btb - 1, 0.08), 0.10,
                           f"Electronic-component new orders / shipments {btb:.2f} (3-mo avg to {_month_name(months[-1])}); "
                           f"above 1.00 means orders outrunning output", raw=btb, as_of=months[-1],
                           url="https://fred.stlouisfed.org/series/A34HNO", age_days=_period_age(months[-1])))
     uo = series(con, "fred", "components_unfilled_orders")
     if len(uo) >= 7 and uo[-7][1]:
         g = ((uo[-1][1] / uo[-7][1]) ** 2 - 1) * 100
-        out.append(Signal("Component order backlog", "Census", "supply", _t(g, 15), 0.08,
+        out.append(Signal("Component order backlog", "Census", "supply", _t(g, 25), 0.08,
                           f"Electronic-component unfilled orders {g:+.1f}% annualized over 6 months to {_month_name(uo[-1][0])}",
                           raw=g, as_of=uo[-1][0], url="https://fred.stlouisfed.org/series/A34HUO", age_days=_period_age(uo[-1][0])))
     inv, shp = dict(series(con, "fred", "electronics_inventories")), dict(series(con, "fred", "electronics_shipments"))
@@ -337,8 +338,8 @@ def extra_macro_signals(con) -> list[Signal]:
                       age_days=_period_age(m2[-1]),
                       evidence=f"Electronics inventory-to-shipments {ratios[-1]:.2f} vs 5-yr avg {base:.2f} ({dev:+.0%}); "
                                f"lean inventories mean less buffer")
-        out.append(Signal("Electronics inventory cover", "Census", "supply", _t(-dev, 0.05), 0.08, **common))
-        out.append(Signal("Electronics inventory cover", "Census", "price", _t(-dev, 0.05), 0.05, **common))
+        out.append(Signal("Electronics inventory cover", "Census", "supply", _t(-dev, 0.10), 0.08, **common))
+        out.append(Signal("Electronics inventory cover", "Census", "price", _t(-dev, 0.10), 0.05, **common))
     fx = []
     for code in ("twd", "jpy", "krw"):
         s_ = series(con, "fred", f"fx_{code}")
@@ -347,7 +348,7 @@ def extra_macro_signals(con) -> list[Signal]:
     if fx:
         chg = statistics.fmean(c for _, c, _ in fx)
         # weaker Asian currencies (more per US$) make Asian-made parts cheaper in dollars
-        out.append(Signal("Asian currency moves", "FX", "price", _t(-chg, 3), 0.08,
+        out.append(Signal("Asian currency moves", "FX", "price", _t(-chg, 5), 0.08,
                           "3-mo change per US$: " + ", ".join(f"{c} {v:+.1f}%" for c, v, _ in fx)
                           + (" (Asian currencies weaker: dollar prices ease)" if chg > 0 else " (Asian currencies stronger: dollar prices firm)"),
                           raw=chg, as_of=fx[0][2], url="https://fred.stlouisfed.org/series/DEXTAUS", age_days=_period_age(fx[0][2])))
@@ -356,8 +357,8 @@ def extra_macro_signals(con) -> list[Signal]:
         val, label, period, url, age = k
         common = dict(raw=val, as_of=period, url=url, age_days=age,
                       evidence=f"Korea {label} {val:+.0f}% YoY (customs flash via wire reports); earliest hard read on chip demand")
-        out.append(Signal("Korea export momentum", "Korea customs", "supply", _t(val - 10, 40), 0.08, **common))
-        out.append(Signal("Korea export momentum", "Korea customs", "price", _t(val - 10, 40), 0.08, **common))
+        out.append(Signal("Korea export momentum", "Korea customs", "supply", _t(val - 10, 100), 0.08, **common))
+        out.append(Signal("Korea export momentum", "Korea customs", "price", _t(val - 10, 100), 0.08, **common))
     pol = _policy(con)
     if pol:
         out.append(pol)
@@ -388,7 +389,7 @@ def _policy(con) -> Signal | None:
         return None
     load = sum(d["supply_tone"] * math.exp(-a / 45) for d, a in docs)
     newest = min(docs, key=lambda x: x[1])[0]
-    return Signal("U.S. trade-policy actions", "Federal Register", "supply", _t(load, 2), 0.08,
+    return Signal("U.S. trade-policy actions", "Federal Register", "supply", _t(load, 3), 0.08,
                   f"{len(docs)} export-control / tariff actions in 120 days; latest: “{newest['title'][:100]}” ({newest['published']})",
                   raw=load, url=newest["url"], age_days=min(a for _, a in docs))
 
@@ -405,7 +406,7 @@ def taiwan_signal(con, segment: str) -> list[Signal]:
             continue
         hist = [x for x in (yoy_growth(rev[:i]) for i in range(max(15, len(rev) - 36), len(rev))) if x is not None]
         base = statistics.median(hist) if len(hist) >= 6 else 5.0
-        parts.append(_t(g - base, 20))
+        parts.append(_t(g - base, 60))
         notes.append(f"{name} {g:+.0f}% YoY (typical {base:+.0f}%)")
         ages.append(_period_age(rev[-1][0]))
         urls.append(_url(con, "mops", f"{t}:revenue"))
@@ -436,8 +437,8 @@ def memory_spot_signal(con) -> list[Signal]:
     m = statistics.fmean(chg)
     common = dict(raw=m, as_of=last_day, url="https://www.dramexchange.com/", age_days=_iso_age(last_day + "T12:00:00+00:00"),
                   evidence=f"Memory spot prices over ~4 weeks: {', '.join(notes[:5])} (DRAMeXchange session averages)")
-    return [Signal("Memory spot prices", "DRAMeXchange", "price", _t(m, 10), 0.30, **common),
-            Signal("Memory spot prices", "DRAMeXchange", "supply", _t(m, 10), 0.10, **common)]
+    return [Signal("Memory spot prices", "DRAMeXchange", "price", _t(m, 20), 0.30, **common),
+            Signal("Memory spot prices", "DRAMeXchange", "supply", _t(m, 20), 0.10, **common)]
 
 
 def quake_signal(con, segment: str | None) -> list[Signal]:
@@ -468,13 +469,13 @@ def part_signals(snap: dict | None, hist: list[dict], bom_row: dict | None) -> l
     out = []
     lead = snap.get("lead_days")
     if lead is not None:
-        out.append(Signal("Factory lead time", src, "supply", _t(lead - BASELINE_LEAD_DAYS, 60), 0.30,
+        out.append(Signal("Factory lead time", src, "supply", _t(lead - BASELINE_LEAD_DAYS, 90), 0.30,
                           f"Factory lead time {lead / 7:.0f} weeks vs a ~12-week norm ({snap['provider']})",
                           raw=lead, as_of=snap["day"], url=url, age_days=age))
     older = [h for h in hist if h.get("day") and h["day"] <= _days_before(snap["day"], 14)]
     if older and lead is not None and older[-1].get("lead_days") is not None:
         d = lead - older[-1]["lead_days"]
-        out.append(Signal("Lead-time trend", "Part history", "supply", _t(d, 21), 0.15,
+        out.append(Signal("Lead-time trend", "Part history", "supply", _t(d, 28), 0.15,
                           f"Lead time {'up' if d >= 0 else 'down'} {abs(d) / 7:.1f} weeks since {older[-1]['day']}",
                           raw=d, as_of=snap["day"], age_days=age))
     stock = snap.get("total_avail")
@@ -499,11 +500,15 @@ def part_signals(snap: dict | None, hist: list[dict], bom_row: dict | None) -> l
     if any(k in lc for k in ("nrnd", "not recommended", "obsolete", "eol", "end of life", "last time")):
         out.append(Signal("Lifecycle status", src, "supply", 1.0, 0.15, f"Lifecycle: {snap['lifecycle']}",
                           as_of=snap["day"], url=url, age_days=age))
+    if snap.get("tariff_pct"):
+        out.append(Signal("Tariff surcharge", src, "price", _t(snap["tariff_pct"], 30), 0.20,
+                          f"{snap.get('tariff_note') or 'Tariff surcharge reported'} (origin: {snap.get('country_of_origin') or 'unknown'})",
+                          raw=snap["tariff_pct"], as_of=snap["day"], url=url, age_days=age))
     price = snap.get("price_1k")
     olderp = [h for h in older if h.get("price_1k")]
     if price and olderp:
         pct = price / olderp[-1]["price_1k"] - 1
-        out.append(Signal("Part price trend", "Part history", "price", _t(pct, 0.10), 0.25,
+        out.append(Signal("Part price trend", "Part history", "price", _t(pct, 0.15), 0.25,
                           f"1k-unit price ${price:.3f}, {pct:+.1%} since {olderp[-1]['day']}", raw=pct,
                           as_of=snap["day"], age_days=age))
     return out

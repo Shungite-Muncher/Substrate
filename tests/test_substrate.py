@@ -123,11 +123,11 @@ def test_part_signals_from_snapshot():
             "sellers": [{"seller": "A", "stock": 1000}], "lifecycle": "NRND", "price_1k": 1.1}
     hist = [{"day": "2026-08-01", "lead_days": 120, "price_1k": 1.0}, snap]
     names = {s.name: s for s in signals.part_signals(snap, hist, {"annual_qty": 520000})}
-    assert names["Factory lead time"].norm > 0.8
+    assert names["Factory lead time"].norm > 0.7      # 26 weeks: strong but no longer pinned at the maximum
     assert names["Lead-time trend"].norm > 0.9
     assert names["Channel inventory cover"].norm > 0.6      # 0.1 weeks of cover
     assert names["Lifecycle status"].norm == 1.0
-    assert names["Part price trend"].norm > 0.7
+    assert 0.5 < names["Part price trend"].norm < 0.7  # +10% in two months: firm, not maxed
 
 
 def test_db_roundtrip(tmp_path, monkeypatch):

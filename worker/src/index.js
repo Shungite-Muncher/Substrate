@@ -162,7 +162,17 @@ async function mouserLookup(env, mpn) {
   const p1 = pool.filter((x) => x.breaks.length).map((x) => priceAt(x.breaks, 1));
   const pk = pool.filter((x) => x.breaks.length).map((x) => priceAt(x.breaks));
   const p = best.p;
-  return { mpn: p.ManufacturerPartNumber || mpn, provider: "mouser", manufacturer: p.Manufacturer, description: p.Description,
+  // origin, classification and tariff surcharge (Mouser's trade/compliance fields)
+  const comp = (list) => Object.fromEntries((list || []).map((x) => [x.ComplianceName, x.ComplianceValue]));
+  const clean = (v) => (!v || /^(not available|none)$/i.test(String(v).trim()) ? null : String(v).trim());
+  const tc = comp(p.TradeCompliance), pc = comp(p.ProductCompliance);
+  const notes = pool.flatMap((x) => (x.p.SurchargeMessages || []).map((m) => m && m.message).filter(Boolean));
+  const pcts = notes.flatMap((n) => [...n.matchAll(/(\d+(?:\.\d+)?)\s*%/g)].map((m) => +m[1]));
+  const trade = { country_of_origin: clean(tc["Country of Origin"]), fab_country: clean(tc["Country of Diffusion"]),
+    assembly_country: clean(tc["Assembly Country of Origin"]), us_hts: clean(pc.USHTS), eccn: clean(pc.ECCN),
+    tariff_note: notes.join(" ") || null, tariff_pct: pcts.length ? Math.max(...pcts) : null,
+    notice: pool.flatMap((x) => x.p.InfoMessages || []).join(" ") || null };
+  return { ...trade, mpn: p.ManufacturerPartNumber || mpn, provider: "mouser", manufacturer: p.Manufacturer, description: p.Description,
     category: p.Category, total_avail: stocks.length ? stocks.reduce((a, b) => a + b, 0) : null,
     lead_days: best.lead || (live.find((x) => x.lead) || {}).lead || null,
     price_1k: pk.length ? Math.min(...pk) : null, price_1: p1.length ? Math.min(...p1) : null,
@@ -190,7 +200,7 @@ async function nexarBudgetAdd(env) {
 
 async function liveLookup(env, mpn, ctx) {
   const cache = caches.default;
-  const key = new Request(`https://substrate-cache.internal/v2/part/${encodeURIComponent(mpn)}`);
+  const key = new Request(`https://substrate-cache.internal/v3/part/${encodeURIComponent(mpn)}`);
   const hit = await cache.match(key);
   if (hit) return hit.json();
   let snap = null;
@@ -214,12 +224,14 @@ function scorePart(latest, snap) {
   if (snap) {
     const src = snap.provider === "octopart" ? "Octopart" : "Part data";
     if (snap.lead_days != null) sigs.push({ name: "Factory lead time", source: src, component: "supply", weight: 0.30,
-      norm: tanh((snap.lead_days - BASELINE_LEAD_DAYS) / 60), evidence: `Factory lead time ${Math.round(snap.lead_days / 7)} weeks vs a ~12-week norm (${snap.provider})`, url: snap.url });
+      norm: tanh((snap.lead_days - BASELINE_LEAD_DAYS) / 90), evidence: `Factory lead time ${Math.round(snap.lead_days / 7)} weeks vs a ~12-week norm (${snap.provider})`, url: snap.url });
     if (snap.total_avail != null) sigs.push({ name: "Channel inventory cover", source: src, component: "supply", weight: 0.20,
       norm: tanh((4 - Math.log10(snap.total_avail + 1)) / 1.5), evidence: `Channel stock ${snap.total_avail.toLocaleString()} units across authorized sellers`, url: snap.url });
     const n = new Set((snap.sellers || []).filter((s) => (s.stock || 0) > 0).map((s) => s.seller)).size;
     if ((snap.sellers || []).length) sigs.push({ name: "Sources with stock", source: src, component: "supply", weight: 0.05,
       norm: tanh((3 - n) / 2), evidence: `${n} authorized seller(s) currently holding stock`, url: snap.url });
+    if (snap.tariff_pct) sigs.push({ name: "Tariff surcharge", source: src, component: "price", weight: 0.20,
+      norm: tanh(snap.tariff_pct / 30), evidence: `${snap.tariff_note} (origin: ${snap.country_of_origin || "unknown"})`, url: snap.url });
     if (/nrnd|not recommended|obsolete|eol|end of life|last time/i.test(snap.lifecycle || "")) sigs.push({ name: "Lifecycle status",
       source: src, component: "supply", weight: 0.15, norm: 1, evidence: `Lifecycle: ${snap.lifecycle}`, url: snap.url });
   }
@@ -230,8 +242,8 @@ function scorePart(latest, snap) {
   };
   const supply = +comp("supply").toFixed(1), price = +comp("price").toFixed(1);
   const lab = (s, kind) => kind === "supply"
-    ? (s >= 75 ? "Severe" : s >= 62 ? "Elevated" : s >= 54 ? "Rising" : s > 46 ? "Neutral" : s > 38 ? "Easing" : "Low")
-    : (s >= 72 ? "Rising fast" : s >= 60 ? "Rising" : s >= 53 ? "Firming" : s > 47 ? "Flat" : s > 40 ? "Softening" : "Falling");
+    ? (s >= 85 ? "Severe" : s >= 70 ? "Elevated" : s >= 58 ? "Rising" : s > 42 ? "Neutral" : s > 30 ? "Easing" : "Low")
+    : (s >= 85 ? "Rising fast" : s >= 68 ? "Rising" : s >= 57 ? "Firming" : s > 43 ? "Flat" : s > 32 ? "Softening" : "Falling");
   const conf = base.confidence * (snap ? 1 : 0.8);
   sigs.sort((a, b) => Math.abs(b.weight * b.norm) - Math.abs(a.weight * a.norm));
   return { segment: seg, supply_risk: supply, price_trend: price, confidence: +conf.toFixed(1),
@@ -308,6 +320,7 @@ function partFacts(part) {
     lead_time_weeks: s.lead_days ? Math.round(s.lead_days / 7) : null, stock: s.total_avail ?? null,
     pbo_on_order_qty: s.on_order ?? null, pbo_next_arrival: s.on_order_eta ?? null,
     price_qty1_usd: s.price_1 ?? null, price_1k_usd: s.price_1k ?? null, lifecycle: s.lifecycle ?? null,
+    country_of_origin: s.country_of_origin ?? null, us_hts: s.us_hts ?? null, tariff: s.tariff_note ?? null,
     segment: part.segment, supply_risk: part.supply_risk, price_trend: part.price_trend,
     outlook: s.outlook ? { action: s.outlook.action, why: s.outlook.why } : undefined,
     top_drivers: (part.signals || []).slice(0, 3).map((x) => x.evidence),

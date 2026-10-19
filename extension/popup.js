@@ -1,7 +1,7 @@
 const out = document.getElementById("out");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n, d = 0) => (n == null ? "–" : Number(n).toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d }));
-const color = (v) => (v >= 62 ? "var(--hi)" : v >= 54 ? "var(--mid)" : v <= 46 ? "var(--lo)" : "var(--muted)");
+const color = (v) => (v >= 70 ? "var(--hi)" : v >= 58 ? "var(--mid)" : v <= 42 ? "var(--lo)" : "var(--muted)");
 
 async function run(mpn) {
   mpn = normalize(mpn);
@@ -26,6 +26,7 @@ async function run(mpn) {
         <div><span>Current price</span><br><b>${s.price_1 ? "$" + fmt(s.price_1, 3) : s.price_1k ? "$" + fmt(s.price_1k, 3) : "–"}</b><br><span>${s.price_1 && s.price_1k ? "qty 1 · $" + fmt(s.price_1k, 3) + " @1k" : s.price_1k ? "@1k qty" : ""}</span></div>
         <div><span>Channel stock</span><br><b>${fmt(s.total_avail)}</b><br><span>via ${esc(p.via)}</span></div>
       </div>
+      ${s.country_of_origin || s.tariff_note ? `<div style="font-size:12px;margin-bottom:.5rem">Origin: <b>${esc(s.country_of_origin || "–")}</b>${s.tariff_note ? `<br><span style="color:var(--hi)">${esc(s.tariff_note)}</span>` : ""}</div>` : ""}
       <b style="font-size:12px">Top drivers</b>
       <ul>${(p.signals || []).slice(0, 3).map((x) => `<li>${esc(x.evidence)}</li>`).join("")}</ul>
       ${p.outlook ? `<div style="margin-top:.6rem;font-size:12px"><b>3-mo outlook:</b> ${esc(p.outlook.action)}<br><span class="muted">${esc(p.outlook.why)}</span></div>` : ""}

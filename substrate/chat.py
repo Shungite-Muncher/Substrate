@@ -105,6 +105,7 @@ def part_facts(part: dict) -> dict:
             "lead_time_weeks": round(s["lead_days"] / 7) if s.get("lead_days") else None, "stock": s.get("total_avail"),
             "pbo_on_order_qty": s.get("on_order"), "pbo_next_arrival": s.get("on_order_eta"),
             "price_qty1_usd": s.get("price_1"), "price_1k_usd": s.get("price_1k"), "lifecycle": s.get("lifecycle"),
+            "country_of_origin": s.get("country_of_origin"), "us_hts": s.get("us_hts"), "tariff": s.get("tariff_note"),
             "segment": part.get("segment"), "supply_risk": part.get("supply_risk"), "price_trend": part.get("price_trend"),
             "top_drivers": [x["evidence"] for x in (part.get("signals") or [])[:3]]}
 
