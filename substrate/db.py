@@ -67,8 +67,11 @@ def now_iso() -> str:
 
 
 def connect(path=None) -> sqlite3.Connection:
+    default = path is None
     path = path or config.DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
+    if default and path.exists() and _warehouse_newer(path):
+        path.unlink()      # git pull brought newer shared data: rebuild rather than dump stale rows over it
     fresh = not path.exists()
     con = sqlite3.connect(path)
     con.row_factory = sqlite3.Row
@@ -87,6 +90,11 @@ def _add_missing_columns(con, table: str, cols: str) -> None:
         bits = part.split()
         if len(bits) >= 2 and bits[0].isidentifier() and bits[0].upper() != "PRIMARY" and bits[0] not in have:
             con.execute(f"ALTER TABLE {table} ADD COLUMN {bits[0]} {bits[1]}")
+
+
+def _warehouse_newer(db_path) -> bool:
+    files = list(config.WAREHOUSE_DIR.glob("*.jsonl"))
+    return bool(files) and max(f.stat().st_mtime for f in files) > db_path.stat().st_mtime + 1
 
 
 @contextmanager

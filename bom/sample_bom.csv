@@ -15,3 +15,13 @@ XC7A35T-1CSG324C,AMD,Artix-7 FPGA 33K LC CSBGA-324,logic,20000,38.00,AMD
 NTMFS5C430NLT1G,onsemi,40V N-Ch MOSFET SO-8FL,power,600000,0.55,onsemi
 C3M0065090D,Wolfspeed,900V 65mOhm SiC MOSFET TO-247,power,30000,6.40,Wolfspeed
 IPB017N10N5ATMA1,Infineon,100V N-Ch OptiMOS 5 D2PAK,power,80000,3.10,Infineon
+ATMEGA328P-AU,Microchip,8-bit AVR MCU 32KB Flash TQFP-32,mcu,180000,2.05,Microchip
+ESP32-S3-WROOM-1-N8R8,Espressif,Wi-Fi + BLE module 8MB flash 8MB PSRAM,mcu,90000,3.90,Espressif
+STM32G431CBT6,STMicroelectronics,ARM Cortex-M4 MCU 128KB Flash LQFP-48,mcu,70000,3.95,STMicroelectronics
+IS25LP128-JBLE,ISSI,128Mb SPI NOR Flash SOIC-8,memory,150000,3.10,ISSI
+TLV9002IDR,Texas Instruments,Dual 1MHz rail-to-rail op amp SOIC-8,analog,600000,0.30,Texas Instruments
+LM2596S-5.0/NOPB,Texas Instruments,3A 5V step-down regulator TO-263,analog,50000,3.90,Texas Instruments
+SN65HVD230DR,Texas Instruments,3.3V CAN transceiver SOIC-8,analog,220000,1.20,Texas Instruments
+BSS138,onsemi,50V N-ch small-signal MOSFET SOT-23,power,2000000,0.06,onsemi
+IRF540NPBF,Infineon,100V 33A N-ch MOSFET TO-220,power,120000,0.45,Infineon
+LCMXO2-1200HC-4TG100C,Lattice,MachXO2 FPGA 1280 LUT TQFP-100,logic,15000,8.90,Lattice
