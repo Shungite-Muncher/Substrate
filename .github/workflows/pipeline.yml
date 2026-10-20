@@ -55,6 +55,9 @@ jobs:
           MOUSER_API_KEY: ${{ secrets.MOUSER_API_KEY }}
           DIGIKEY_CLIENT_ID: ${{ secrets.DIGIKEY_CLIENT_ID }}
           DIGIKEY_CLIENT_SECRET: ${{ secrets.DIGIKEY_CLIENT_SECRET }}
+          ELEMENT14_API_KEY: ${{ secrets.ELEMENT14_API_KEY }}
+          CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
+          TRADE_GOV_API_KEY: ${{ secrets.TRADE_GOV_API_KEY }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           TEAMS_WEBHOOK_URL: ${{ secrets.TEAMS_WEBHOOK_URL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}

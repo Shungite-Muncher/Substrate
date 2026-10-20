@@ -24,6 +24,8 @@ from .. import db
 from ..segments import SEGMENTS
 
 TILT = 1.0              # log-odds shift per unit of (segment score - market score) / 50
+PART_GRACE_DAYS = 3     # part snapshots refresh every 3 days
+PART_DECAY_HALF_LIFE = 14   # after that, every 2 weeks of staleness halves a part forecast's conviction
 LEAD_ELASTICITY = 0.30  # log lead-time change at full-confidence tightening (+1)
 HORIZON_DAYS = 91
 ETA_GRACE_DAYS = 14     # stock counts as on time if it shows up within 2 weeks of the stated date
@@ -78,9 +80,14 @@ def build(con, scores: dict, forecasts: dict, part_models: dict | None = None) -
         snap = p.get("snapshot") or {}
         feats = (latest.get(mpn) or {}).get("f") if (latest.get(mpn) or {}).get("day") == snap.get("day") else None
         out = {"basis": {}}
+        age = (date.today() - date.fromisoformat(snap["day"])).days if snap.get("day") else None
+        k = 1.0 if age is None else 0.5 ** (max(0, age - PART_GRACE_DAYS) / PART_DECAY_HALF_LIFE)
+        shrink = lambda q: 0.5 + (q - 0.5) * k
+        out["data_age_days"], out["decay"] = age, round(k, 3)
 
         # price
         pp, basis = _choose(models.get("price"), feats, pp_h)
+        pp = shrink(pp)
         out["p_price_up"], out["basis"]["price"] = round(pp, 3), basis
         out["expected_price_change_3m_pct"] = price["point"]
         if snap.get("price_1k"):
@@ -88,6 +95,8 @@ def build(con, scores: dict, forecasts: dict, part_models: dict | None = None) -
 
         # lead time
         ps, basis, lead_y = _choose(models.get("lead"), feats, ps_h, with_point=True)
+        ps = shrink(ps)
+        lead_y = None if lead_y is None else lead_y * k
         out["p_supply_tighter"], out["basis"]["lead"] = round(ps, 3), basis
         lead = snap.get("lead_days")
         out["lead_projection"] = None
@@ -104,6 +113,7 @@ def build(con, scores: dict, forecasts: dict, part_models: dict | None = None) -
         out["pbo"] = None
         if oo:
             pb, basis = _choose(models.get("pbo"), feats, ps_h)
+            pb = shrink(pb)
             out["pbo"] = {"on_order": oo, "eta": eta, "p_backlog_grows": round(pb, 3), "basis": basis}
             _record(con, "pbo", mpn, pb, ps_h, basis, oo, snap)
             if eta:

@@ -58,6 +58,25 @@ SIA blocks cloud IPs, so in GitHub Actions the scraper reaches SIA's public Word
 
 **Customer PO / quote history:** `python -m substrate history customer_po.csv --customer "Acme"` imports any CSV with part number, date, and price and/or quoted lead time (see `bom/po_history_template.csv`), then immediately backtests the part models on it. Customer rows are their own series: they never appear as live market data and are never compared against distributor prices.
 
+## Third-wave sources, relevance weighting and time decay
+
+| Source | Key? | Adds |
+|---|---|---|
+| USITC Harmonized Tariff Schedule API | none | Base duty per tariff code. With each part's origin, it gives a tariff estimate for every part: the distributor's posted surcharge, or else the surcharge posted on parts with the same 4-digit heading and origin (labelled *estimated*) |
+| Drewry World Container Index | none | Asia-to-buyer freight cost (weekly) |
+| Taipower operating reserve | none | Counts only when Taiwan's grid reserve runs thin (fab outage risk) |
+| Nager.Date public holidays | none | Lunar New Year / Golden Week shutdowns in a part's country of origin within 45 days |
+| Wire indicators | none | Taiwan export orders, China chip exports, TrendForce DRAM contract-price outlook (recent releases only) |
+| Census international trade | `CENSUS_API_KEY` | China's share of US chip imports |
+| element14 / Newark | `ELEMENT14_API_KEY` | A third distributor's stock, lead time and price |
+| Consolidated Screening List | `TRADE_GOV_API_KEY` | BOM manufacturers screened against US restricted-party lists |
+
+**Relevance.** Every signal is tagged by how specific it is: part, segment or market. On a part's score, the part's own evidence counts 1.0×, its segment's 0.6× and market-wide conditions 0.4×. On a segment's score, market-wide conditions count 0.7×.
+
+**Time decay on inputs.** Each source has a grace period equal to its normal publication delay (about 45 days for monthly statistics, about 3 days for part snapshots). After that, its weight halves every half-life, down to a floor of 0.25×. Signal tables show base × relevance × freshness.
+
+**Time decay on predictions.** A market forecast's distance from 50/50, and from zero expected change, halves for every 90 days its inputs are past their normal age. Part forecasts do the same with a 14-day half-life. The Outlook tab shows the factor applied.
+
 ## Run it locally
 
 ```bash

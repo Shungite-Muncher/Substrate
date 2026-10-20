@@ -118,6 +118,11 @@ def watchlist(con) -> dict:
             tariffs.append({"mpn": mpn, "kind": "tariff exposure", "direction": "worsening", "title":
                             f"{mpn}: {r['tariff_pct']:.0f}% US tariff surcharge (origin {r['country_of_origin']})",
                             "detail": r["tariff_note"]})
+    for r in db.rows(con, "SELECT series, value, meta FROM observations WHERE source='screening' AND value>0 "
+                          "AND period=(SELECT MAX(period) FROM observations WHERE source='screening')"):
+        tariffs.append({"kind": "screening match", "direction": "worsening",
+                        "title": f"{r['series']}: {r['value']:.0f} possible restricted-party match(es)",
+                        "detail": "Consolidated Screening List: review before purchasing"})
     return {"easing": [c for c in changes if c["direction"] == "easing"],
             "worsening": [c for c in changes if c["direction"] == "worsening"] + tariffs}
 

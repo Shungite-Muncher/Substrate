@@ -145,3 +145,39 @@ def test_mouser_trade_fields():
         "InfoMessages": ["Mouser does not presently sell this product in your region."]}]}}, "C3M0065090D")
     assert (r.country_of_origin, r.assembly_country, r.us_hts, r.eccn, r.tariff_pct) == ("China", None, "8541290065", "EAR99", 38.0)
     assert "region" in r.notice
+
+
+def test_freshness_and_relevance_weighting():
+    from substrate import scoring, signals
+    assert signals.freshness("FRED", 40) == 1.0                         # within normal publication lag
+    assert abs(signals.freshness("FRED", 45 + 45) - 0.5) < 1e-9          # one half-life past it
+    assert signals.freshness("Trade press", 365) == signals.FRESHNESS_FLOOR
+    part = signals.Signal("Factory lead time", "Part data", "supply", 1.0, 0.3, "x", level="part")
+    mkt = signals.Signal("PPI", "FRED", "supply", -1.0, 0.3, "y", level="market")
+    s = scoring.summarize([part, mkt], "part")
+    assert s["supply_risk"] > 60      # the part's own evidence outweighs the market-wide one
+    assert {x["name"]: x["relevance"] for x in s["signals"]} == {"Factory lead time": 1.0, "PPI": 0.4}
+
+
+def test_tariff_estimate_from_peers(con):
+    from substrate import signals
+    db.upsert(con, "part_snapshots", {"mpn": "IRF540NPBF", "provider": "mouser", "day": "2026-10-19",
+                                      "country_of_origin": "China", "us_hts": "8541290065", "tariff_pct": 38.0})
+    db.upsert(con, "observations", {"source": "usitc", "series": "8541.21.00", "period": "current", "value": 0.0})
+    te = signals.tariff_estimate(con, {"mpn": "BSS138", "country_of_origin": "China", "us_hts": "8541210095"})
+    assert te["pct"] == 38.0 and te["estimated"] and "IRF540NPBF" in te["basis"] and te["base_duty"] == 0.0
+    assert signals.tariff_estimate(con, {"mpn": "X", "country_of_origin": "Malaysia", "us_hts": "8541210095"})["pct"] == 0.0
+
+
+def test_prediction_decay():
+    from substrate.predict.engine import decay_factor
+    assert decay_factor("2026-09", date(2026, 10, 15))[0] == 1.0
+    assert 0.5 < decay_factor("2026-09", date(2027, 2, 1))[0] < 0.6
+
+
+def test_wire_and_freight_parsers():
+    from substrate.scrapers import logistics, wires
+    assert wires.extract("taiwan_export_orders_yoy", "Taiwan September export orders fall 3.2% on weak demand", "2026-10-20") == ("2026-09", -3.2)
+    assert wires.extract("china_chip_exports_yoy", "China's semiconductor exports surge 103.9% in Jan-Aug", "2026-09-15") == ("2026-08", 103.9)
+    assert wires.contract("DRAM contract prices forecast to grow only 13-18% in Q3", "2026-06-20") == ("dram", "2026Q3", 15.5)
+    assert logistics.wci("<p>WCI上涨3%至4,485美元/FEU，亚欧航线</p>") == 4485.0

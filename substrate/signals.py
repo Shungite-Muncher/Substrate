@@ -25,7 +25,21 @@ from .segments import COMPANY_NAMES, SEGMENTS
 PUB_LAG = {"capacity_utilization": 1, "ppi_semis": 1, "tsmc_revenue": 1, "sia_sales": 2}
 HALF_LIFE_DAYS = {"FRED": 45, "TSMC": 40, "SIA": 60, "SEC": 120, "Trade press": 10, "Earnings releases": 60,
                   "Octopart": 7, "Part history": 14, "Part data": 7, "Census": 60, "FX": 30, "Korea customs": 20,
-                  "Federal Register": 45, "MOPS": 40, "DRAMeXchange": 7, "USGS": 7}
+                  "Federal Register": 45, "MOPS": 40, "DRAMeXchange": 7, "USGS": 7, "Wire reports": 45,
+                  "Freight": 14, "Taipower": 3, "Holidays": 30, "Tariffs": 60}
+# Normal publication delay per source: a monthly statistic is ~45 days old the day it's released,
+# so time decay only starts after this grace period.
+GRACE_DAYS = {"FRED": 45, "TSMC": 40, "SIA": 60, "SEC": 100, "Census": 60, "FX": 5, "Korea customs": 10, "MOPS": 40,
+              "DRAMeXchange": 2, "Trade press": 0, "Earnings releases": 30, "Federal Register": 0, "USGS": 0,
+              "Octopart": 3, "Part data": 3, "Part history": 3, "Wire reports": 30, "Freight": 7, "Taipower": 1,
+              "Holidays": 0, "Tariffs": 30}
+FRESHNESS_FLOOR = 0.25
+
+
+def freshness(source: str, age_days: float) -> float:
+    """Weight multiplier for stale evidence: 1.0 within the grace period, halving every half-life after."""
+    extra = max(0.0, age_days - GRACE_DAYS.get(source, 7))
+    return max(FRESHNESS_FLOOR, 0.5 ** (extra / HALF_LIFE_DAYS.get(source, 30)))
 SEC_FILINGS = ("sec-8k", "sec-10q")
 TONE_DAMPING = 0.6   # headline tone is a count ratio (often +/-1); count it at 60%
 NON_PRESS = SEC_FILINGS + ("fedreg", "usgs")
@@ -43,6 +57,7 @@ class Signal:
     as_of: str | None = None
     url: str | None = None
     age_days: float = 0.0
+    level: str = "market"   # "part" | "segment" | "market": how specific the evidence is to what's being scored
 
     def to_dict(self):
         d = asdict(self)
@@ -234,7 +249,7 @@ def inventory_signal(con, tickers: list[str], label: str, weight_supply: float, 
     norm = statistics.fmean(parts)
     ev = f"{label} inventory: " + "; ".join(notes)
     common = dict(evidence=ev, raw=norm, age_days=statistics.fmean(ages),
-                  url="https://www.sec.gov/edgar/search/")
+                  url="https://www.sec.gov/edgar/search/", level="segment")
     return [Signal("Supplier inventory days", "SEC", "supply", norm, weight_supply, **common),
             Signal("Supplier inventory days", "SEC", "price", norm, weight_price, **common)]
 
@@ -275,7 +290,8 @@ def document_signals(con, segment: str | None, source_kind: str) -> list[Signal]
               f"{'tightening' if comp == 'supply' and mean > 0 else 'easing' if comp == 'supply' else 'up' if mean > 0 else 'down'}"
               f" ({mean:+.2f}). e.g. " + " | ".join(f"“{d['title'][:90]}”" for d, _ in top))
         out.append(Signal(name, src, comp, mean * shrink * TONE_DAMPING, base_w if source_kind != "sec-8k" else 0.10, ev,
-                          raw=mean, url=top[0][0]["url"], age_days=statistics.fmean(a for _, a in toned)))
+                          raw=mean, url=top[0][0]["url"], age_days=statistics.fmean(a for _, a in toned),
+                          level="segment" if segment else "market"))
     return out
 
 
@@ -291,7 +307,11 @@ def segment_signals(con, segment: str, calibration: dict | None = None) -> list[
     sigs += inventory_signal(con, spec["companies"], spec["label"], 0.20, 0.10)
     sigs += taiwan_signal(con, segment)
     if segment == "memory":
-        sigs += memory_spot_signal(con)
+        sigs += memory_spot_signal(con) + memory_contract_signal(con)
+    if segment in ("mcu", "analog", "power"):
+        sigs += china_supply_signal(con)
+    if segment in ("logic", "memory", "mcu", "analog"):
+        sigs += taipower_signal(con)
     sigs += quake_signal(con, segment)
     sigs += document_signals(con, segment, "news")
     sigs += document_signals(con, segment, "sec-8k")
@@ -362,7 +382,111 @@ def extra_macro_signals(con) -> list[Signal]:
     pol = _policy(con)
     if pol:
         out.append(pol)
+    out += wire_signals(con) + logistics_signals(con) + import_mix_signal(con)
     return out
+
+
+def import_mix_signal(con) -> list[Signal]:
+    """Census: China's share of US chip imports. A falling share means buyers are shifting sources
+    under tariffs, which tightens supply from the alternatives."""
+    rows = db.rows(con, "SELECT series, period, value FROM observations WHERE source='census_trade'")
+    if not rows:
+        return []
+    by = {}
+    for r in rows:
+        tot = by.setdefault(r["period"], [0.0, 0.0])
+        tot[0] += r["value"]
+        if r["series"].endswith(":China"):
+            tot[1] += r["value"]
+    months = sorted(p for p, (t, _) in by.items() if t > 0)
+    if len(months) < 2:
+        return []
+    share = lambda p: by[p][1] / by[p][0]
+    now, then = months[-1], months[max(0, len(months) - 13)]
+    d = (share(now) - share(then)) * 100
+    return [Signal("US chip import mix", "Census", "supply", _t(-d, 5), 0.04,
+                   f"China share of US chip imports {share(now):.1%} in {_month_name(now)} ({d:+.1f} pts vs {_month_name(then)})",
+                   raw=d, as_of=now, url="https://api.census.gov/data/timeseries/intltrade/imports/hs",
+                   age_days=_period_end_age(now))]
+
+
+def _latest(con, source: str, name: str):
+    r = con.execute("SELECT period, value, url, meta FROM observations WHERE source=? AND series=? ORDER BY period DESC LIMIT 1",
+                    (source, name)).fetchone()
+    return dict(r) if r else None
+
+
+def _period_end_age(period: str) -> float:
+    if "Q" in period:
+        y, q = int(period[:4]), int(period[-1])
+        return max((date.today() - date(y, q * 3, 28)).days, 0)
+    if len(period) == 7:
+        return max((date.today() - date(int(period[:4]), int(period[5:7]), 28)).days, 0)
+    return _iso_age(period + "T12:00:00+00:00")
+
+
+def wire_signals(con) -> list[Signal]:
+    out = []
+    t = _latest(con, "wires", "taiwan_export_orders_yoy")
+    if t:
+        common = dict(raw=t["value"], as_of=t["period"], url=t["url"], age_days=_period_end_age(t["period"]),
+                      evidence=f"Taiwan export orders {t['value']:+.1f}% YoY in {_month_name(t['period'])}: orders booked now ship in 1-3 months")
+        out.append(Signal("Taiwan export orders", "Wire reports", "supply", _t(t["value"] - 10, 60), 0.06, **common))
+        out.append(Signal("Taiwan export orders", "Wire reports", "price", _t(t["value"] - 10, 60), 0.05, **common))
+    return out
+
+
+def logistics_signals(con) -> list[Signal]:
+    out = []
+    w = series(con, "drewry", "wci_composite")
+    if w:
+        day, v = w[-1]
+        ref = [x for d, x in w if (date.fromisoformat(day) - date.fromisoformat(d)).days >= 28]
+        if ref:
+            chg = v / ref[-1] - 1
+            norm, ev = _t(chg, 0.25), f"Drewry container index ${v:,.0f}/40ft, {chg:+.0%} over 4 weeks"
+        else:   # until a month of history exists, compare with a ~$2,500 long-run norm
+            norm, ev = _t(v / 2500 - 1, 1.0), f"Drewry container index ${v:,.0f}/40ft vs ~$2,500 long-run norm"
+        common = dict(raw=v, as_of=day, url="https://www.drewry.co.uk/supply-chain-advisors/supply-chain-expertise/world-container-index-assessed-by-drewry",
+                      age_days=_iso_age(day + "T12:00:00+00:00"), evidence=ev + " (Asia-to-buyer shipping cost)")
+        out.append(Signal("Freight cost", "Freight", "supply", norm, 0.04, **common))
+        out.append(Signal("Freight cost", "Freight", "price", norm, 0.03, **common))
+    return out
+
+
+def taipower_signal(con) -> list[Signal]:
+    """Only speaks when Taiwan's grid reserve is thin (healthy reserve isn't evidence of easier chip supply)."""
+    r = _latest(con, "taipower", "reserve_margin")
+    if not r:
+        return []
+    risk = max(0.0, _t(10 - r["value"], 4))
+    if risk < 0.05:
+        return []
+    return [Signal("Taiwan grid reserve", "Taipower", "supply", risk, 0.08,
+                   f"Taipower forecast operating reserve {r['value']:.1f}% (below ~10% raises outage risk for Taiwan fabs)",
+                   raw=r["value"], as_of=r["period"], url=r["url"], age_days=_iso_age(r["period"] + "T12:00:00+00:00"),
+                   level="segment")]
+
+
+def memory_contract_signal(con) -> list[Signal]:
+    r = _latest(con, "wires", "dram_contract_qoq")
+    if not r:
+        return []
+    return [Signal("Memory contract prices", "Wire reports", "price", _t(r["value"], 20), 0.25,
+                   f"TrendForce: DRAM contract prices {r['value']:+.1f}% QoQ expected for {r['period']} (midpoint)",
+                   raw=r["value"], as_of=r["period"], url=r["url"], age_days=max(0, _period_end_age(r["period"]) - 90),
+                   level="segment")]
+
+
+def china_supply_signal(con) -> list[Signal]:
+    """China's chip exports surging = more mature-node supply competing in MCUs, analog and power."""
+    r = _latest(con, "wires", "china_chip_exports_yoy")
+    if not r:
+        return []
+    return [Signal("China mature-node exports", "Wire reports", "supply", -_t(r["value"], 150), 0.04,
+                   f"China chip exports {r['value']:+.1f}% YoY (through {_month_name(r['period'])}): more Chinese "
+                   "mature-node supply reaching the market", raw=r["value"], as_of=r["period"], url=r["url"],
+                   age_days=_period_end_age(r["period"]), level="segment")]
 
 
 def _korea_latest(con):
@@ -414,7 +538,7 @@ def taiwan_signal(con, segment: str) -> list[Signal]:
         return []
     return [Signal("Taiwan supply-chain loading", "MOPS", "supply", statistics.fmean(parts), 0.12,
                    "3-mo revenue: " + "; ".join(notes), raw=statistics.fmean(parts), url=urls[0],
-                   age_days=statistics.fmean(ages))]
+                   age_days=statistics.fmean(ages), level="segment")]
 
 
 def memory_spot_signal(con) -> list[Signal]:
@@ -436,6 +560,7 @@ def memory_spot_signal(con) -> list[Signal]:
         return []           # needs ~3 weeks of daily snapshots before it speaks
     m = statistics.fmean(chg)
     common = dict(raw=m, as_of=last_day, url="https://www.dramexchange.com/", age_days=_iso_age(last_day + "T12:00:00+00:00"),
+                  level="segment",
                   evidence=f"Memory spot prices over ~4 weeks: {', '.join(notes[:5])} (DRAMeXchange session averages)")
     return [Signal("Memory spot prices", "DRAMeXchange", "price", _t(m, 20), 0.30, **common),
             Signal("Memory spot prices", "DRAMeXchange", "supply", _t(m, 20), 0.10, **common)]
@@ -454,13 +579,60 @@ def quake_signal(con, segment: str | None) -> list[Signal]:
     if v < 0.15:            # distant or moderate quakes stay in the news feed, not the score
         return []
     return [Signal("Earthquake near fabs", "USGS", "supply", min(1.0, v), 0.15,
-                   f"{d['title']} ({d['published'][:10]})", raw=v, url=d["url"], age_days=age)]
+                   f"{d['title']} ({d['published'][:10]})", raw=v, url=d["url"], age_days=age,
+                   level="segment" if segment else "market")]
 
 
 BASELINE_LEAD_DAYS = 84  # ~12 weeks: a "normal" factory lead time for standard semis
 
 
-def part_signals(snap: dict | None, hist: list[dict], bom_row: dict | None) -> list[Signal]:
+HOLIDAY_ORIGINS = {"China": "CN", "Taiwan": "CN", "Japan": "JP", "Korea, Republic of": "KR", "Korea": "KR",
+                   "Malaysia": "MY", "Philippines": "PH", "Thailand": "TH", "Vietnam": "VN", "Viet Nam": "VN",
+                   "Mexico": "MX", "Germany": "DE", "United States": "US"}
+
+
+def holiday_signal(con, snap: dict) -> list[Signal]:
+    """A multi-day shutdown in the part's country of origin within 45 days adds predictable weeks."""
+    cc = HOLIDAY_ORIGINS.get(snap.get("country_of_origin") or "")
+    if not cc or con is None:
+        return []
+    today = date.today()
+    rows = db.rows(con, "SELECT series, period FROM observations WHERE source='holidays' AND series LIKE ? AND period>=? "
+                        "ORDER BY period", (f"{cc}:%", today.isoformat()))
+    for r in rows:
+        days = (date.fromisoformat(r["period"]) - today).days
+        if days <= 45:
+            name = r["series"].split(":", 1)[1]
+            return [Signal("Holiday shutdown ahead", "Holidays", "supply", 0.3, 0.05,
+                           f"{name} starts {r['period']} in {snap['country_of_origin']} (origin): factories pause; expect +1-2 weeks",
+                           as_of=r["period"], url="https://date.nager.at", level="part")]
+    return []
+
+
+def tariff_estimate(con, snap: dict) -> dict | None:
+    """Posted surcharge if the distributor shows one; otherwise the surcharge posted on parts with the same
+    4-digit tariff heading and origin (e.g. other China-made MOSFETs), plus the USITC base duty."""
+    if not snap or not snap.get("us_hts") or con is None:
+        return None
+    digits = "".join(c for c in snap["us_hts"] if c.isdigit())
+    h8 = f"{digits[:4]}.{digits[4:6]}.{digits[6:8]}" if len(digits) >= 8 else None
+    base = con.execute("SELECT value FROM observations WHERE source='usitc' AND series=?", (h8,)).fetchone() if h8 else None
+    base_pct = base["value"] if base and base["value"] is not None else None
+    if snap.get("tariff_pct"):
+        return {"pct": snap["tariff_pct"], "basis": "posted by distributor", "base_duty": base_pct}
+    origin = snap.get("country_of_origin")
+    if not origin:
+        return None
+    peers = db.rows(con, "SELECT DISTINCT mpn, tariff_pct FROM part_snapshots WHERE tariff_pct IS NOT NULL AND country_of_origin=? "
+                         "AND substr(replace(us_hts,'.',''),1,4)=? AND mpn!=?", (origin, digits[:4], snap.get("mpn") or ""))
+    if peers:
+        vals = sorted(p["tariff_pct"] for p in peers)
+        return {"pct": vals[len(vals) // 2], "basis": f"estimated: same HTS {digits[:4]} heading and origin ({origin}) as "
+                + ", ".join(p["mpn"] for p in peers[:2]), "base_duty": base_pct, "estimated": True}
+    return {"pct": 0.0, "basis": "no surcharge posted for this origin and heading", "base_duty": base_pct}
+
+
+def part_signals(snap: dict | None, hist: list[dict], bom_row: dict | None, con=None) -> list[Signal]:
     if not snap:
         return []
     src = "Octopart" if snap["provider"] == "octopart" else "Part data"
@@ -471,13 +643,13 @@ def part_signals(snap: dict | None, hist: list[dict], bom_row: dict | None) -> l
     if lead is not None:
         out.append(Signal("Factory lead time", src, "supply", _t(lead - BASELINE_LEAD_DAYS, 90), 0.30,
                           f"Factory lead time {lead / 7:.0f} weeks vs a ~12-week norm ({snap['provider']})",
-                          raw=lead, as_of=snap["day"], url=url, age_days=age))
+                          raw=lead, as_of=snap["day"], url=url, age_days=age, level="part"))
     older = [h for h in hist if h.get("day") and h["day"] <= _days_before(snap["day"], 14)]
     if older and lead is not None and older[-1].get("lead_days") is not None:
         d = lead - older[-1]["lead_days"]
         out.append(Signal("Lead-time trend", "Part history", "supply", _t(d, 28), 0.15,
                           f"Lead time {'up' if d >= 0 else 'down'} {abs(d) / 7:.1f} weeks since {older[-1]['day']}",
-                          raw=d, as_of=snap["day"], age_days=age))
+                          raw=d, as_of=snap["day"], age_days=age, level="part"))
     stock = snap.get("total_avail")
     if stock is not None:
         qty = (bom_row or {}).get("annual_qty")
@@ -489,28 +661,32 @@ def part_signals(snap: dict | None, hist: list[dict], bom_row: dict | None) -> l
             norm = _t(4 - math.log10(stock + 1), 1.5)
             ev = f"Channel stock {stock:,} units across authorized sellers"
         out.append(Signal("Channel inventory cover", src, "supply", norm, 0.20, ev, raw=stock,
-                          as_of=snap["day"], url=url, age_days=age))
+                          as_of=snap["day"], url=url, age_days=age, level="part"))
     sellers = snap.get("sellers") or []
     if sellers:
         n = len({s["seller"] for s in sellers if (s.get("stock") or 0) > 0})
         out.append(Signal("Sources with stock", src, "supply", _t(3 - n, 2), 0.05,
                           f"{n} authorized seller(s) currently holding stock", raw=n, as_of=snap["day"],
-                          url=url, age_days=age))
+                          url=url, age_days=age, level="part"))
     lc = (snap.get("lifecycle") or "").lower()
     if any(k in lc for k in ("nrnd", "not recommended", "obsolete", "eol", "end of life", "last time")):
         out.append(Signal("Lifecycle status", src, "supply", 1.0, 0.15, f"Lifecycle: {snap['lifecycle']}",
-                          as_of=snap["day"], url=url, age_days=age))
-    if snap.get("tariff_pct"):
-        out.append(Signal("Tariff surcharge", src, "price", _t(snap["tariff_pct"], 30), 0.20,
-                          f"{snap.get('tariff_note') or 'Tariff surcharge reported'} (origin: {snap.get('country_of_origin') or 'unknown'})",
-                          raw=snap["tariff_pct"], as_of=snap["day"], url=url, age_days=age))
+                          as_of=snap["day"], url=url, age_days=age, level="part"))
+    te = tariff_estimate(con, snap)
+    if te and te["pct"]:
+        est = te.get("estimated")
+        out.append(Signal("Tariff surcharge", "Tariffs", "price", _t(te["pct"], 30), 0.12 if est else 0.20,
+                          (f"~{te['pct']:.0f}% US tariff ({te['basis']})" if est else
+                           f"{snap.get('tariff_note') or 'Tariff surcharge reported'} (origin: {snap.get('country_of_origin') or 'unknown'})"),
+                          raw=te["pct"], as_of=snap["day"], url=url, age_days=age, level="part"))
+    out += holiday_signal(con, snap)
     price = snap.get("price_1k")
     olderp = [h for h in older if h.get("price_1k")]
     if price and olderp:
         pct = price / olderp[-1]["price_1k"] - 1
         out.append(Signal("Part price trend", "Part history", "price", _t(pct, 0.15), 0.25,
                           f"1k-unit price ${price:.3f}, {pct:+.1%} since {olderp[-1]['day']}", raw=pct,
-                          as_of=snap["day"], age_days=age))
+                          as_of=snap["day"], age_days=age, level="part"))
     return out
 
 

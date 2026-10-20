@@ -36,6 +36,19 @@ TARGETS = {
               "up": "supply tightens", "down": "supply loosens"},
 }
 EVAL_START = "2010-01"
+# Prediction decay: the monthly inputs are normally ~45 days old when published. Beyond that,
+# every extra 90 days halves the forecast's distance from 50/50 (and from zero change).
+DATA_GRACE_DAYS = 45
+DECAY_HALF_LIFE_DAYS = 90
+
+
+def decay_factor(base_period: str, today=None) -> tuple[float, int]:
+    from datetime import date as _d
+    today = today or _d.today()
+    y, m = int(base_period[:4]), int(base_period[5:7])
+    end = _d(y + (m == 12), m % 12 + 1, 1)                 # first day after the base month
+    age = max((today - end).days, 0)
+    return 0.5 ** (max(0, age - DATA_GRACE_DAYS) / DECAY_HALF_LIFE_DAYS), age
 MIN_TRAIN = 96          # months of history before the first out-of-sample forecast
 EDGE_MARGIN = 0.02      # Brier skill vs trend-following needed to claim an edge
 L2 = 10.0               # logistic regularization strength on standardized features
@@ -146,11 +159,17 @@ def forecast_now(rows: list[dict], name: str, wf: dict) -> dict | None:
     naive = _naive_change(base, spec)
     magnitude_edge = m.get("mae_model", 1e9) < m.get("mae_naive", 0)
     point_used = point if magnitude_edge else naive
+    decay, data_age = decay_factor(base["period"])
+    p_raw, point_raw = p_used, point_used
+    p_used = 0.5 + (p_used - 0.5) * decay
+    point_used = point_used * decay
     contrib = sorted(full.contributions(x[0], FEATURE_NAMES), key=lambda c: -abs(c["logodds"]))
     return {
         "target": name, **{k: spec[k] for k in ("label", "short", "unit", "h", "kind", "up", "down")},
         "base_period": base["period"], "target_period": period(base["i"] + spec["h"]),
         "prob_up": round(p_used, 3), "prob_model": round(p_model, 3), "prob_trend": round(p_trend, 3),
+        "prob_undecayed": round(p_raw, 3), "point_undecayed": round(point_raw, 2),
+        "decay": round(decay, 3), "data_age_days": data_age,
         "basis": "model" if edge else "trend-following baseline",
         "point": round(point_used, 2), "point_model": round(point, 2), "point_naive": round(naive, 2),
         "point_basis": "model" if magnitude_edge else "recent pace continues",

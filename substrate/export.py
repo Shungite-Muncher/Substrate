@@ -33,6 +33,7 @@ def _part_view(p: dict) -> dict:
         "url": snap.get("url"), "sellers": (snap.get("sellers") or [])[:8],
         "annual_qty": (p.get("bom") or {}).get("annual_qty"), "target_price": (p.get("bom") or {}).get("target_price"),
         "price_vs_target_pct": p.get("price_vs_target_pct"), "history": p.get("history", []),
+        "tariff_estimate": p.get("tariff_estimate"),
     }
 
 

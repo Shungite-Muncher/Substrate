@@ -103,9 +103,9 @@ function renderMarket() {
 function signalTable(sigs) {
   return `<div class="table-wrap" style="padding:0"><table class="sig-table"><thead><tr><th>Input</th><th>Score</th><th>Push</th><th class="num">Weight</th><th>Evidence</th></tr></thead><tbody>` +
     sigs.map((s) => `<tr><td><b>${esc(s.name)}</b><div class="src">${esc(s.source)}</div></td><td>${esc(s.component)}</td>
-      <td>${normbar(s.norm)}</td><td class="num">${s.weight.toFixed(2)}</td>
+      <td>${normbar(s.norm)}</td><td class="num" title="base ${s.base_weight ?? s.weight} × relevance ${s.relevance ?? 1} × freshness ${s.freshness ?? 1}">${s.weight.toFixed(2)}${s.relevance != null && (s.relevance < 1 || s.freshness < 1) ? `<div class="src">${(s.base_weight ?? s.weight).toFixed(2)} ×${s.relevance} ×${s.freshness}</div>` : ""}</td>
       <td>${esc(s.evidence)} ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">source</a>` : ""}</td></tr>`).join("") +
-    `</tbody></table></div><p class="hint">Push: red = tighter supply / higher price (bad for buyers), green = easing. Score = 50 + 50 × weighted mean.</p>`;
+    `</tbody></table></div><p class="hint">Push: red = tighter supply / higher price (bad for buyers), green = easing. Weight = base × relevance (part-specific evidence counts most, market-wide least) × freshness (stale data counts less). Score = 50 + 50 × weighted mean.</p>`;
 }
 function lineChart(id, pts, label, scale = 1) {
   const el = document.getElementById(id);
@@ -211,8 +211,8 @@ function renderPartDetail(p, host) {
       <div><span>Country of origin</span><b>${esc(p.country_of_origin || "–")}</b></div>
       <div><span>Wafer fab / assembly</span><b>${esc(p.fab_country || "–")} / ${esc(p.assembly_country || "–")}</b></div>
       <div><span>US HTS / ECCN</span><b class="mono">${esc(p.us_hts || "–")} · ${esc(p.eccn || "–")}</b></div>
-      <div style="${p.tariff_pct ? "background:var(--accent-soft)" : ""}"><span>Tariff</span><b style="color:${p.tariff_pct ? css("--risk-hi") : "inherit"}">${p.tariff_pct ? fmt(p.tariff_pct) + "% surcharge" : "none reported"}</b></div>
-    </div>${p.tariff_note || p.notice ? `<p class="hint">${esc([p.tariff_note, p.notice].filter(Boolean).join(" "))}</p>` : ""}` : ""}
+      <div style="${p.tariff_pct ? "background:var(--accent-soft)" : ""}"><span>Tariff</span><b style="color:${(p.tariff_estimate?.pct || p.tariff_pct) ? css("--risk-hi") : "inherit"}">${p.tariff_estimate?.pct ? (p.tariff_estimate.estimated ? "~" : "") + fmt(p.tariff_estimate.pct) + "% " + (p.tariff_estimate.estimated ? "est." : "surcharge") : p.tariff_pct ? fmt(p.tariff_pct) + "% surcharge" : "none reported"}</b>${p.tariff_estimate?.base_duty != null ? `<small>base duty ${p.tariff_estimate.base_duty ? fmt(p.tariff_estimate.base_duty, 1) + "%" : "free"}</small>` : ""}</div>
+    </div>${p.tariff_note || p.notice || p.tariff_estimate?.estimated ? `<p class="hint">${esc([p.tariff_note, p.tariff_estimate?.estimated ? "Tariff " + p.tariff_estimate.basis + "." : "", p.notice].filter(Boolean).join(" "))}</p>` : ""}` : ""}
     ${p.outlook ? `<div class="scenario"><b>3-month outlook</b> ${actBadge(p.outlook.action)}
       <div style="margin-top:.4rem">${pct(p.outlook.p_price_up)} chance prices rise · ${pct(p.outlook.p_supply_tighter)} chance supply tightens${
         p.outlook.lead_projection ? ` · lead time ${fmt(p.outlook.lead_projection.now_weeks)} → ${fmt(p.outlook.lead_projection.in_13w_weeks)} wk projected` : ""}</div>
@@ -426,6 +426,7 @@ function renderOutlook() {
       <h3>${esc(f.label)}</h3>
       <div class="p" style="color:${pColor}">${pct(f.prob_up)} <small>chance ${esc(f.up)}</small></div>
       <div class="exp">Expected ${signed(f.point)}${esc(f.unit)}${range}</div>
+      ${f.decay != null && f.decay < 0.995 ? `<div class="hint" style="margin:0 0 .4rem">Data ${f.data_age_days} days old: conviction scaled ×${fmt(f.decay, 2)} toward 50/50 (undecayed ${pct(f.prob_undecayed)})</div>` : ""}
       <span class="tag ${edge ? "edge" : "base"}">${edge ? "Tested edge over trend-following" : "Trend-following baseline: no tested edge yet"}</span>
       <div class="stats">Out of sample ${esc(m.window?.[0] || "")}–${esc(m.window?.[1] || "")} (${m.n} months):
         direction right ${pct(m.hit_rate_model)} (trend ${pct(m.hit_rate_trend)}), probability skill vs trend ${signed((m.skill_vs_trend || 0) * 100)}%,

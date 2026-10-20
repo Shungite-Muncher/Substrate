@@ -56,6 +56,10 @@ NEXAR_MONTHLY_PART_BUDGET = int(env("NEXAR_MONTHLY_PART_BUDGET", "40"))
 MOUSER_API_KEY = env("MOUSER_API_KEY")
 DIGIKEY_CLIENT_ID = env("DIGIKEY_CLIENT_ID")
 DIGIKEY_CLIENT_SECRET = env("DIGIKEY_CLIENT_SECRET")
+ELEMENT14_API_KEY = env("ELEMENT14_API_KEY")          # Newark / Farnell / element14 product search
+ELEMENT14_STORE = env("ELEMENT14_STORE", "www.newark.com")
+CENSUS_API_KEY = env("CENSUS_API_KEY")                # US imports by country (api.census.gov)
+TRADE_GOV_API_KEY = env("TRADE_GOV_API_KEY")          # Consolidated Screening List
 # Re-query a part at most this often (days). Cached snapshots are reused otherwise.
 PART_REFRESH_DAYS = int(env("PART_REFRESH_DAYS", "3"))
 

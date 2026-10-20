@@ -13,11 +13,12 @@ from datetime import date, timedelta
 from .. import config, db
 from .base import PartRecord, normalize_mpn
 from .digikey import DigiKeyProvider
+from .element14 import Element14Provider
 from .mouser import MouserProvider
 from .nexar import NexarProvider
 
 log = logging.getLogger(__name__)
-PROVIDERS = [NexarProvider(), MouserProvider(), DigiKeyProvider()]
+PROVIDERS = [NexarProvider(), MouserProvider(), DigiKeyProvider(), Element14Provider()]
 
 
 def configured() -> list[str]:
@@ -27,7 +28,8 @@ def configured() -> list[str]:
 def _has_creds(p) -> bool:
     return {"octopart": bool(config.NEXAR_CLIENT_ID and config.NEXAR_CLIENT_SECRET),
             "mouser": bool(config.MOUSER_API_KEY),
-            "digikey": bool(config.DIGIKEY_CLIENT_ID and config.DIGIKEY_CLIENT_SECRET)}[p.name]
+            "digikey": bool(config.DIGIKEY_CLIENT_ID and config.DIGIKEY_CLIENT_SECRET),
+            "element14": bool(config.ELEMENT14_API_KEY)}[p.name]
 
 
 def cached(con, mpn: str, max_age_days: int | None = None) -> dict | None:

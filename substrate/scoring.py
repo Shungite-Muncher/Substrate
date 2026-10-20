@@ -28,7 +28,23 @@ EXPECTED_SOURCES = {   # event-driven sources (USGS, DRAMeXchange for non-memory
     "part": {"supply": {"FRED", "TSMC", "SIA", "SEC", "Trade press", "Octopart", "Part history"},
              "price": {"FRED", "SIA", "SEC", "Trade press", "Part history"}},
 }
-PART_MACRO_DISCOUNT = 0.5   # segment-level evidence counts half as much as the part's own data
+# How much each level of evidence counts toward a score at each scope: a part's own data
+# outranks its segment's, which outranks market-wide conditions.
+RELEVANCE = {"market": {"market": 1.0, "segment": 1.0, "part": 1.0},
+             "segment": {"segment": 1.0, "market": 0.7, "part": 1.0},
+             "part": {"part": 1.0, "segment": 0.6, "market": 0.4}}
+
+
+def weighted(sigs: list[signals.Signal], scope: str) -> list[signals.Signal]:
+    """Apply relevance and time decay: effective weight = base x relevance x freshness."""
+    out = []
+    for s in sigs:
+        rel = RELEVANCE[scope].get(s.level, 0.5)
+        fr = signals.freshness(s.source, s.age_days)
+        x = signals.Signal(**{**s.__dict__, "weight": s.weight * rel * fr})
+        x.base_weight, x.relevance, x.fresh = s.weight, rel, round(fr, 2)
+        out.append(x)
+    return out
 
 
 def component(sigs: list[signals.Signal], comp: str, scope: str) -> dict:
@@ -65,6 +81,7 @@ def confidence_label(c: float) -> str:
 
 
 def summarize(sigs: list[signals.Signal], scope: str) -> dict:
+    sigs = weighted(sigs, scope)
     sup, pri = component(sigs, "supply", scope), component(sigs, "price", scope)
     conf = round((sup["confidence"] + pri["confidence"]) / 2, 1)
     drivers = sorted(sigs, key=lambda s: abs(s.weight * s.norm), reverse=True)
@@ -73,7 +90,8 @@ def summarize(sigs: list[signals.Signal], scope: str) -> dict:
         "labels": {"supply": supply_label(sup["score"]), "price": price_label(pri["score"]),
                    "confidence": confidence_label(conf)},
         "components": {"supply": sup, "price": pri},
-        "signals": [s.to_dict() for s in drivers],
+        "signals": [{**s.to_dict(), "base_weight": round(getattr(s, "base_weight", s.weight), 3),
+                     "relevance": getattr(s, "relevance", 1.0), "freshness": getattr(s, "fresh", 1.0)} for s in drivers],
     }
 
 
@@ -91,11 +109,13 @@ def score_part(con, mpn: str, bom_row: dict | None, seg_cache: dict, calibration
     if seg and seg not in seg_cache:
         seg_cache[seg] = signals.segment_signals(con, seg, calibration)
     base = seg_cache.get(seg) or signals.market_signals(con, calibration)
-    macro = [signals.Signal(**{**s.to_dict(), "weight": s.weight * PART_MACRO_DISCOUNT}) for s in base]
-    sigs = macro + signals.part_signals(snap, hist, bom_row)
+    sigs = list(base) + signals.part_signals(snap, hist, bom_row, con)
     out = summarize(sigs, "part")
     out.update({"mpn": mpn, "segment": seg, "snapshot": snap, "bom": bom_row,
                 "history": [{k: h.get(k) for k in ("day", "provider", "lead_days", "total_avail", "price_1k")} for h in hist][-60:]})
+    te = signals.tariff_estimate(con, snap) if snap else None
+    if te:
+        out["tariff_estimate"] = te
     if snap and bom_row and bom_row.get("target_price") and snap.get("price_1k"):
         out["price_vs_target_pct"] = round((snap["price_1k"] / bom_row["target_price"] - 1) * 100, 1)
     return out
