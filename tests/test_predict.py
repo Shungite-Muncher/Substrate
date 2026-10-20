@@ -74,6 +74,11 @@ def test_ledger_records_once_and_resolves(tmp_path, monkeypatch):
 def test_timing_calls():
     price = {"point": 3.0}
     assert outlook._timing(0.7, 0.5, price, {})[0] == "Buy ahead / lock pricing"
+    easy = {"snapshot": {"lead_days": 63, "total_avail": 50000}, "bom": {"annual_qty": 104000}}
+    tight = {"snapshot": {"lead_days": 364, "total_avail": 28}, "bom": {"annual_qty": 70000}}
+    assert outlook._timing(0.7, 0.5, price, easy)[0] == "Lock pricing (no need to buy ahead)"
+    assert outlook._timing(0.7, 0.5, price, tight)[0] == "Buy ahead / lock pricing"
+    assert outlook._timing(0.5, 0.5, price, tight)[0] == "Secure supply"
     assert outlook._timing(0.3, 0.4, price, {})[0] == "Wait / keep terms short"
     action, why = outlook._timing(0.5, 0.5, price, {"price_vs_target_pct": 12})
     assert action == "Hold course" and "above your target" in why

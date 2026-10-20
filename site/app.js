@@ -407,7 +407,7 @@ async function drawBacktest() {
 }
 
 // ---------- outlook (predictive layer) --------------------------------------------
-const ACTION_COLOR = { "Buy ahead / lock pricing": "--risk-hi", "Wait / keep terms short": "--risk-lo", "Hold course": null };
+const ACTION_COLOR = { "Buy ahead / lock pricing": "--risk-hi", "Secure supply": "--risk-hi", "Lock pricing (no need to buy ahead)": "--risk-mid", "Wait / keep terms short": "--risk-lo", "Hold course": null };
 const actBadge = (a) => `<span class="act" style="background:${ACTION_COLOR[a] ? css(ACTION_COLOR[a]) : "#6b7280"}">${esc(a)}</span>`;
 const pct = (x, d = 0) => (x == null ? "–" : fmt(x * 100, d) + "%");
 const signed = (x, d = 1) => (x == null ? "–" : (x > 0 ? "+" : "") + fmt(x, d));

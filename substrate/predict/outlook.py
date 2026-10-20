@@ -143,13 +143,53 @@ def _call(p: float, up: str, down: str) -> str:
     return up if p >= 0.58 else down if p <= 0.42 else "Steady"
 
 
+NORMAL_LEAD_DAYS = 84      # ~12 weeks
+THIN_COVER_WEEKS = 4
+
+
+def _part_supply(part: dict) -> tuple[str, str]:
+    """The part's own supply position, which outranks market-wide odds for the stocking decision."""
+    snap = part.get("snapshot") or {}
+    lead, stock = snap.get("lead_days"), snap.get("total_avail")
+    qty = (part.get("bom") or {}).get("annual_qty")
+    cover = stock / (qty / 52) if stock is not None and qty else None
+    oo, eta = snap.get("on_order"), snap.get("on_order_eta")
+    if lead is None and stock is None:
+        return "unknown", "no part data"
+    facts = []
+    if lead is not None:
+        facts.append(f"{lead / 7:.0f}-week lead time")
+    if cover is not None:
+        facts.append(f"{cover:.1f} weeks of channel stock")
+    if oo:
+        facts.append(f"{oo:,} on order" + (f" (next {eta[:10]})" if eta else ""))
+    # Lead time decides; one distributor's shelf stock vs a full year of usage would make nearly every part
+    # look short, so stock only counts when it's zero with no restock due within a month.
+    soon = (date.today() + timedelta(days=30)).isoformat()
+    restock_soon = bool(oo) and bool(eta) and eta[:10] <= soon
+    out_of_stock = stock == 0 and not restock_soon
+    tight = (lead is not None and lead > 1.4 * NORMAL_LEAD_DAYS) or out_of_stock
+    easy = lead is not None and lead <= NORMAL_LEAD_DAYS and (stock or 0) > 0
+    return ("tight" if tight else "easy" if easy else "normal"), ", ".join(facts)
+
+
 def _timing(pp: float, ps: float, price: dict, part: dict) -> tuple[str, str]:
     gap = part.get("price_vs_target_pct")
-    if pp >= 0.6 or (pp >= 0.55 and ps >= 0.6):
+    state, facts = _part_supply(part)
+    rising = pp >= 0.6 or (pp >= 0.55 and ps >= 0.6)
+    if rising and state in ("easy", "normal"):
+        return "Lock pricing (no need to buy ahead)", (f"{pp:.0%} chance prices are higher in 3 months, but supply is "
+                                                       f"{'comfortable' if state == 'easy' else 'adequate'} ({facts}): "
+                                                       "fix the price, keep normal order timing")
+    if rising:
         why = f"{pp:.0%} chance prices are higher in 3 months"
-        if ps >= 0.55:
+        if state == "tight":
+            why += f"; supply is tight ({facts})"
+        elif ps >= 0.55:
             why += f"; {ps:.0%} chance supply tightens"
         return "Buy ahead / lock pricing", why
+    if state == "tight":
+        return "Secure supply", f"price outlook neutral, but supply is tight ({facts})"
     if pp <= 0.4 and ps <= 0.5:
         return "Wait / keep terms short", f"only {pp:.0%} chance prices rise in 3 months; supply not tightening"
     why = f"{pp:.0%} chance prices rise; no strong timing signal"
