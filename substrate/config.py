@@ -66,6 +66,8 @@ PART_REFRESH_DAYS = int(env("PART_REFRESH_DAYS", "3"))
 # Customer profile used to tailor reports.
 CUSTOMER_NAME = env("SUBSTRATE_CUSTOMER", "Demo Distributor")
 CUSTOMER_PEERS = [t.strip() for t in env("SUBSTRATE_PEERS", "ARW,AVT").split(",") if t.strip()]
+# The part every briefing spotlights and the demo uses as its default example.
+FEATURED_PART = env("SUBSTRATE_FEATURED_PART", "IPB017N10N5ATMA1")
 
 # Delivery (all optional): Slack / Teams incoming webhooks, email via Resend (free tier).
 SITE_URL = env("SITE_URL", "https://shungite-muncher.github.io/Substrate/")

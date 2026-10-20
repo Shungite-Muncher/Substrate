@@ -29,6 +29,10 @@ FORMAT = """Structure exactly:
 ## What changed
 - 3-5 bullets on new data and score moves, each with a citation.
 
+## Featured part: <mpn>
+- 2-3 bullets on the "featured_part" from the context: lead time, stock, PBO (on-order quantity and next arrival),
+  price at qty 1 and 1k, origin and tariff, the buy-timing call and why. Quote the numbers exactly.
+
 ## Alerts   (only if the "alerts" list in the context is non-empty; one bullet each, most severe first)
 
 ## Segment board
@@ -101,7 +105,26 @@ def build_context(con, results: dict, outlook: dict | None = None, alerts: list 
     return {"as_of": as_of, "edition": edition_for(), "customer": config.CUSTOMER_NAME, "market": market,
             "segments": segs, "bom_watchlist": watch, "new_headlines": headlines,
             "outlook": outlook_context(outlook), "alerts": [{k: a[k] for k in ("kind", "title", "detail")} for a in alerts or []],
+            "featured_part": featured(results, outlook),
             "sources": sources}
+
+
+def featured(results: dict, outlook: dict | None) -> dict | None:
+    """Compact facts for the spotlight part (config.FEATURED_PART)."""
+    p = results.get("parts", {}).get(config.FEATURED_PART)
+    if not p:
+        return None
+    s = p.get("snapshot") or {}
+    o = ((outlook or {}).get("parts") or {}).get(config.FEATURED_PART) or {}
+    te = p.get("tariff_estimate") or {}
+    return {"mpn": p["mpn"], "description": s.get("description") or (p.get("bom") or {}).get("description"),
+            "manufacturer": s.get("manufacturer") or (p.get("bom") or {}).get("manufacturer"),
+            "lead_weeks": round(s["lead_days"] / 7) if s.get("lead_days") else None, "stock": s.get("total_avail"),
+            "pbo_on_order": s.get("on_order"), "pbo_next_arrival": s.get("on_order_eta"),
+            "price_qty1": s.get("price_1"), "price_1k": s.get("price_1k"), "origin": s.get("country_of_origin"),
+            "tariff_pct": te.get("pct"), "tariff_basis": te.get("basis"),
+            "supply_risk": p["supply_risk"], "supply_label": p["labels"]["supply"], "price_trend": p["price_trend"],
+            "call": o.get("action"), "why": o.get("why"), "data_date": s.get("day")}
 
 
 def outlook_context(outlook: dict | None) -> dict | None:
@@ -147,6 +170,17 @@ def template_briefing(ctx: dict) -> str:
     for w in ctx["bom_watchlist"]:
         lt = f", {w['lead_weeks']:.0f} wk lead" if w["lead_weeks"] else ""
         lines.append(f"- **{w['mpn']}** ({w['segment'] or 'unclassified'}): supply risk {w['supply_risk']:.0f}{lt}. {w['driver']}")
+    fp = ctx.get("featured_part")
+    if fp:
+        n = lambda v, d=0: "n/a" if v is None else f"{v:,.{d}f}"
+        lines += ["", f"## Featured part: {fp['mpn']}"]
+        lines.append(f"- {fp.get('manufacturer') or ''} {fp.get('description') or ''}: supply risk {fp['supply_risk']:.0f} "
+                     f"({fp['supply_label'].lower()}), {n(fp['lead_weeks'])}-week lead time, {n(fp['stock'])} in stock"
+                     + (f", {n(fp['pbo_on_order'])} on order (next {fp['pbo_next_arrival']})" if fp.get("pbo_on_order") else "") + ".")
+        lines.append(f"- Price ${n(fp['price_qty1'], 3)} at qty 1, ${n(fp['price_1k'], 3)} at 1k; origin {fp.get('origin') or 'n/a'}"
+                     + (f", ~{fp['tariff_pct']:.0f}% US tariff" if fp.get("tariff_pct") else ", no tariff surcharge") + ".")
+        if fp.get("call"):
+            lines.append(f"- **{fp['call']}**: {fp['why']}.")
     o = ctx.get("outlook")
     if o:
         lines += ["", "## Outlook"]

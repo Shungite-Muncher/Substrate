@@ -339,8 +339,11 @@ async function sendChat(text, mpn) {
 }
 $("#chat-form").addEventListener("submit", (e) => { e.preventDefault(); const t = $("#chat-input").value; $("#chat-input").value = ""; sendChat(t); });
 $("#chat-input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#chat-form").requestSubmit(); } });
+function featuredPart() {
+  return window.SUBSTRATE_FEATURED_PART || DATA.featured_part || [...DATA.parts].sort((a, b) => b.supply_risk - a.supply_risk)[0]?.mpn;
+}
 function renderChips() {
-  const top = [...DATA.parts].sort((a, b) => b.supply_risk - a.supply_risk)[0];
+  const top = DATA.parts.find((p) => p.mpn === featuredPart()) || [...DATA.parts].sort((a, b) => b.supply_risk - a.supply_risk)[0];
   const seg = Object.values(DATA.segments).sort((a, b) => b.supply_risk - a.supply_risk)[0];
   const chips = [
     top && `Negotiation brief for ${top.mpn}`,
@@ -554,6 +557,12 @@ $("#set-save").addEventListener("click", () => {
   renderBom();
   renderWatch();
   renderChips();
+  const fp = featuredPart();
+  if (fp) {
+    $("#lookup-mpn").placeholder = `Manufacturer part number, e.g. ${fp}`;
+    const hint = $(".msg.bot em");
+    if (hint) hint.textContent = `"Prep me for a supplier meeting on ${fp}"`;
+  }
   const params = new URLSearchParams(location.search);
   if (params.get("part")) {
     showTab("lookup");

@@ -92,6 +92,7 @@ def run(con, results: dict, backtest_report: dict | None = None, outlook: dict |
             "customer_history": customer_history.summary(con),
         },
     }
+    latest["featured_part"] = config.FEATURED_PART
     _w("latest.json", latest)
     _w("parts.json", {k: {kk: vv for kk, vv in v.items() if kk not in ("history", "components")}
                       for k, v in part_views.items()})
