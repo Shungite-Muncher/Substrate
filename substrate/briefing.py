@@ -5,6 +5,7 @@ Either way every number comes from the scoring engine, never from the model."""
 from __future__ import annotations
 
 import json
+import re
 import logging
 from datetime import datetime, timezone
 
@@ -210,6 +211,13 @@ def template_briefing(ctx: dict) -> str:
     return "\n".join(lines)
 
 
+def tidy(md: str) -> str:
+    """Normalize LLM quirks: full-width citation brackets, empty sections like 'Alerts: None'."""
+    md = re.sub(r"【\s*(\d+)\s*】", r"[\1]", md)
+    md = re.sub(r"\n## Alerts[ \t]*\n+[ \t]*[*_]?(?:none|no alerts)[^\n]*\n", "\n", md, flags=re.I)
+    return md
+
+
 def sources_md(ctx: dict) -> str:
     return "\n".join(f"{i}. [{s['title']}]({s['url']})" if s["url"] else f"{i}. {s['title']}"
                      for i, s in enumerate(ctx["sources"], 1))
@@ -228,6 +236,7 @@ def write(con, results: dict, use_llm: bool = True, outlook: dict | None = None,
             log.warning("LLM briefing failed, using template: %s", e)
     if not body:
         body = template_briefing(ctx)
+    body = tidy(body)
     headline = next((l[2:].strip() for l in body.splitlines() if l.startswith("# ")), "Substrate briefing")
     created = db.now_iso()
     row = {"id": f"{created}-{ctx['edition'].split()[0].lower().rstrip('.')}", "created_at": created,
