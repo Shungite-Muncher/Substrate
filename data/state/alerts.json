@@ -3,13 +3,13 @@
   "10M08SAE144C8G": "Buy ahead / lock pricing",
   "AD8605ARTZ-REEL7": "Buy ahead / lock pricing",
   "ADS1115IDGSR": "Buy ahead / lock pricing",
-  "ATMEGA328P-AU": "Lock pricing (no need to buy ahead)",
+  "ATMEGA328P-AU": "Buy ahead / lock pricing",
   "ATSAMD21G18A-AU": "Lock pricing (no need to buy ahead)",
-  "BSS138": "Buy ahead / lock pricing",
-  "C3M0065090D": "Buy ahead / lock pricing",
+  "BSS138": "Lock pricing (no need to buy ahead)",
+  "C3M0065090D": "Lock pricing (no need to buy ahead)",
   "ESP32-S3-WROOM-1-N8R8": "Lock pricing (no need to buy ahead)",
   "IPB017N10N5ATMA1": "Lock pricing (no need to buy ahead)",
-  "IRF540NPBF": "Lock pricing (no need to buy ahead)",
+  "IRF540NPBF": "Buy ahead / lock pricing",
   "IS25LP128-JBLE": "Buy ahead / lock pricing",
   "LCMXO2-1200HC-4TG100C": "Buy ahead / lock pricing",
   "LM2596S-5.0/NOPB": "Buy ahead / lock pricing",
@@ -24,9 +24,12 @@
   "STM32G431CBT6": "Buy ahead / lock pricing",
   "TLV9002IDR": "Lock pricing (no need to buy ahead)",
   "TPS62130RGTR": "Buy ahead / lock pricing",
-  "W25Q128JVSIQ": "Lock pricing (no need to buy ahead)",
+  "W25Q128JVSIQ": "Buy ahead / lock pricing",
   "XC7A35T-1CSG324C": "Buy ahead / lock pricing"
  },
  "seen": [],
- "seen_parts": []
+ "seen_parts": [
+  "ESP32-S3-WROOM-1-N8R8|tariff added|2026-10-23",
+  "IRF540NPBF|lead time lengthening|2026-10-23"
+ ]
 }
