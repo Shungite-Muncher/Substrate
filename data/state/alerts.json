@@ -22,7 +22,7 @@
   "SN65HVD230DR": "Buy ahead / lock pricing",
   "STM32F407VGT6": "Buy ahead / lock pricing",
   "STM32G431CBT6": "Buy ahead / lock pricing",
-  "TLV9002IDR": "Lock pricing (no need to buy ahead)",
+  "TLV9002IDR": "Buy ahead / lock pricing",
   "TPS62130RGTR": "Buy ahead / lock pricing",
   "W25Q128JVSIQ": "Buy ahead / lock pricing",
   "XC7A35T-1CSG324C": "Buy ahead / lock pricing"
@@ -31,6 +31,16 @@
  "seen_parts": [
   "ESP32-S3-WROOM-1-N8R8|tariff added|2026-10-23",
   "IRF540NPBF|lead time lengthening|2026-10-23",
-  "BSS138|lead time lengthening|2026-10-27"
+  "BSS138|lead time lengthening|2026-10-27",
+  "10M08SAE144C8G|PBO delayed|2026-10-31",
+  "ADS1115IDGSR|lead time lengthening|2026-10-31",
+  "ADS1115IDGSR|PBO delayed|2026-10-31",
+  "LM2596S-5.0/NOPB|lead time lengthening|2026-10-31",
+  "LM358DR|lead time lengthening|2026-10-31",
+  "LM358DR|PBO delayed|2026-10-31",
+  "SN65HVD230DR|lead time lengthening|2026-10-31",
+  "SN65HVD230DR|PBO delayed|2026-10-31",
+  "TLV9002IDR|lead time lengthening|2026-10-31",
+  "TPS62130RGTR|lead time lengthening|2026-10-31"
  ]
 }
