@@ -27,7 +27,9 @@
   "W25Q128JVSIQ": "Buy ahead / lock pricing",
   "XC7A35T-1CSG324C": "Buy ahead / lock pricing"
  },
- "seen": [],
+ "seen": [
+  "https://earthquake.usgs.gov/earthquakes/eventpage/us7000tuku"
+ ],
  "seen_parts": [
   "ESP32-S3-WROOM-1-N8R8|tariff added|2026-10-23",
   "IRF540NPBF|lead time lengthening|2026-10-23",
