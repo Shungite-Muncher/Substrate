@@ -1,14 +1,14 @@
 {
  "calls": {
-  "10M08SAE144C8G": "Buy ahead / lock pricing",
+  "10M08SAE144C8G": "Secure supply",
   "AD8605ARTZ-REEL7": "Buy ahead / lock pricing",
   "ADS1115IDGSR": "Buy ahead / lock pricing",
-  "ATMEGA328P-AU": "Lock pricing (no need to buy ahead)",
-  "ATSAMD21G18A-AU": "Lock pricing (no need to buy ahead)",
+  "ATMEGA328P-AU": "Hold course",
+  "ATSAMD21G18A-AU": "Hold course",
   "BSS138": "Buy ahead / lock pricing",
   "C3M0065090D": "Buy ahead / lock pricing",
-  "ESP32-S3-WROOM-1-N8R8": "Lock pricing (no need to buy ahead)",
-  "IPB017N10N5ATMA1": "Lock pricing (no need to buy ahead)",
+  "ESP32-S3-WROOM-1-N8R8": "Hold course",
+  "IPB017N10N5ATMA1": "Hold course",
   "IRF540NPBF": "Buy ahead / lock pricing",
   "IS25LP128-JBLE": "Buy ahead / lock pricing",
   "LCMXO2-1200HC-4TG100C": "Buy ahead / lock pricing",
@@ -43,6 +43,10 @@
   "SN65HVD230DR|lead time lengthening|2026-10-31",
   "SN65HVD230DR|PBO delayed|2026-10-31",
   "TLV9002IDR|lead time lengthening|2026-10-31",
-  "TPS62130RGTR|lead time lengthening|2026-10-31"
+  "TPS62130RGTR|lead time lengthening|2026-10-31",
+  "BSS138|PBO delayed|2026-11-04",
+  "ESP32-S3-WROOM-1-N8R8|lead time easing|2026-11-04",
+  "IRF540NPBF|PBO delayed|2026-11-04",
+  "LM2596S-5.0/NOPB|PBO delayed|2026-11-04"
  ]
 }
