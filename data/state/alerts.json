@@ -28,7 +28,8 @@
   "XC7A35T-1CSG324C": "Buy ahead / lock pricing"
  },
  "seen": [
-  "https://earthquake.usgs.gov/earthquakes/eventpage/us7000tuku"
+  "https://earthquake.usgs.gov/earthquakes/eventpage/us7000tuku",
+  "https://earthquake.usgs.gov/earthquakes/eventpage/us7000twg9"
  ],
  "seen_parts": [
   "ESP32-S3-WROOM-1-N8R8|tariff added|2026-10-23",
