@@ -1,13 +1,13 @@
 {
  "calls": {
-  "10M08SAE144C8G": "Secure supply",
+  "10M08SAE144C8G": "Buy ahead / lock pricing",
   "AD8605ARTZ-REEL7": "Buy ahead / lock pricing",
   "ADS1115IDGSR": "Buy ahead / lock pricing",
   "ATMEGA328P-AU": "Hold course",
   "ATSAMD21G18A-AU": "Hold course",
   "BSS138": "Buy ahead / lock pricing",
   "C3M0065090D": "Buy ahead / lock pricing",
-  "ESP32-S3-WROOM-1-N8R8": "Hold course",
+  "ESP32-S3-WROOM-1-N8R8": "Lock pricing (no need to buy ahead)",
   "IPB017N10N5ATMA1": "Hold course",
   "IRF540NPBF": "Buy ahead / lock pricing",
   "IS25LP128-JBLE": "Buy ahead / lock pricing",
@@ -48,6 +48,9 @@
   "BSS138|PBO delayed|2026-11-04",
   "ESP32-S3-WROOM-1-N8R8|lead time easing|2026-11-04",
   "IRF540NPBF|PBO delayed|2026-11-04",
-  "LM2596S-5.0/NOPB|PBO delayed|2026-11-04"
+  "LM2596S-5.0/NOPB|PBO delayed|2026-11-04",
+  "IRF540NPBF|lead time easing|2026-11-08",
+  "MT40A1G16TB-062E:F|backorder easing|2026-11-08",
+  "MT40A1G16TB-062E:F|PBO delayed|2026-11-08"
  ]
 }
