@@ -4,7 +4,7 @@
   "AD8605ARTZ-REEL7": "Buy ahead / lock pricing",
   "ADS1115IDGSR": "Buy ahead / lock pricing",
   "ATMEGA328P-AU": "Hold course",
-  "ATSAMD21G18A-AU": "Hold course",
+  "ATSAMD21G18A-AU": "Lock pricing (no need to buy ahead)",
   "BSS138": "Buy ahead / lock pricing",
   "C3M0065090D": "Buy ahead / lock pricing",
   "ESP32-S3-WROOM-1-N8R8": "Lock pricing (no need to buy ahead)",
