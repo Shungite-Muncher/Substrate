@@ -7,9 +7,9 @@
   "ATSAMD21G18A-AU": "Hold course",
   "BSS138": "Buy ahead / lock pricing",
   "C3M0065090D": "Buy ahead / lock pricing",
-  "ESP32-S3-WROOM-1-N8R8": "Lock pricing (no need to buy ahead)",
+  "ESP32-S3-WROOM-1-N8R8": "Hold course",
   "IPB017N10N5ATMA1": "Hold course",
-  "IRF540NPBF": "Buy ahead / lock pricing",
+  "IRF540NPBF": "Lock pricing (no need to buy ahead)",
   "IS25LP128-JBLE": "Buy ahead / lock pricing",
   "LCMXO2-1200HC-4TG100C": "Buy ahead / lock pricing",
   "LM2596S-5.0/NOPB": "Buy ahead / lock pricing",
@@ -51,6 +51,11 @@
   "LM2596S-5.0/NOPB|PBO delayed|2026-11-04",
   "IRF540NPBF|lead time easing|2026-11-08",
   "MT40A1G16TB-062E:F|backorder easing|2026-11-08",
-  "MT40A1G16TB-062E:F|PBO delayed|2026-11-08"
+  "MT40A1G16TB-062E:F|PBO delayed|2026-11-08",
+  "10M08SAE144C8G|PBO delayed|2026-11-12",
+  "IRF540NPBF|lead time easing|2026-11-12",
+  "IRF540NPBF|back in stock|2026-11-12",
+  "IRF540NPBF|PBO delayed|2026-11-12",
+  "TPS62130RGTR|PBO delayed|2026-11-12"
  ]
 }
