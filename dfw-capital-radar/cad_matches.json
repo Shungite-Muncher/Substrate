@@ -1,0 +1,762 @@
+{
+ "matches": {
+  "11235421": {
+   "marketValue": 13471840.0,
+   "owner": "FIVE MILE FLATS LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "423 E LEDBETTER DR",
+   "lienTotal": 4897263.85,
+   "sharedWith": 0
+  },
+  "11311117": {
+   "marketValue": 2280000.0,
+   "owner": "TEAMSTERS RETIREE HOUSING",
+   "cadSrc": "DCAD",
+   "cadSitus": "11900 QUAIL DR",
+   "lienTotal": 965118.67,
+   "sharedWith": 0
+  },
+  "11311152": {
+   "marketValue": 14634750.0,
+   "owner": "ST MARTIN DE PORRES INC",
+   "cadSrc": "DCAD",
+   "cadSitus": "230 S MACARTHUR BLVD",
+   "lienTotal": 5103597.15,
+   "sharedWith": 0
+  },
+  "11311231": {
+   "marketValue": 10093970.0,
+   "owner": null,
+   "cadSrc": "DCAD",
+   "cadSitus": "9215 BRUTON RD",
+   "lienTotal": 3982374.08,
+   "sharedWith": 0
+  },
+  "11311247": {
+   "marketValue": 5199990.0,
+   "owner": "MESQUITE RHF HOUSING INC",
+   "cadSrc": "DCAD",
+   "cadSitus": "1413 RANGE DR",
+   "lienTotal": 1753456.38,
+   "sharedWith": 0
+  },
+  "11311248": {
+   "marketValue": 4699990.0,
+   "owner": "DALLAS RHF HOUSING INC",
+   "cadSrc": "DCAD",
+   "cadSitus": "1409 RANGE DR",
+   "lienTotal": 1688513.74,
+   "sharedWith": 0
+  },
+  "11311267": {
+   "marketValue": 17750000.0,
+   "owner": "HUNTERS DROWN LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "8550 SPRING VALLEY RD",
+   "lienTotal": 6084682.09,
+   "sharedWith": 0
+  },
+  "11311268": {
+   "marketValue": 55950000.0,
+   "owner": "UNIFIED HOUSING OF INWOOD LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "5720 FOREST PARK RD",
+   "lienTotal": 23758436.65,
+   "sharedWith": 0
+  },
+  "11311270": {
+   "marketValue": 21760000.0,
+   "owner": "DALLAS HOUSING AUTHORITY",
+   "cadSrc": "DCAD",
+   "cadSitus": "6855 CLARKWOOD DR",
+   "lienTotal": 4964385.82,
+   "sharedWith": 0
+  },
+  "11311294": {
+   "marketValue": 47019610.0,
+   "owner": "MISKIN LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "500 W CARTWRIGHT RD",
+   "lienTotal": 21661293.56,
+   "sharedWith": 0
+  },
+  "11311296": {
+   "marketValue": 23508920.0,
+   "owner": "FOWLER CHRISTIAN APARTMENTS INC",
+   "cadSrc": "DCAD",
+   "cadSitus": "105 JULIETTE FOWLER ST",
+   "lienTotal": 5675405.8,
+   "sharedWith": 0
+  },
+  "11311310": {
+   "marketValue": 23450000.0,
+   "owner": "TWIN RIVERS RES LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "201 S GLENVILLE DR",
+   "lienTotal": 15436816.78,
+   "sharedWith": 0
+  },
+  "11311311": {
+   "marketValue": 25500000.0,
+   "owner": "GANDIPETA WALK LTD PS",
+   "cadSrc": "DCAD",
+   "cadSitus": "901 W BRAND RD",
+   "lienTotal": 10784302.56,
+   "sharedWith": 0
+  },
+  "11311315": {
+   "marketValue": 66000000.0,
+   "owner": "VILLA VERONA LTD",
+   "cadSrc": "DCAD",
+   "cadSitus": "13330 NOEL RD",
+   "lienTotal": 36202196.42,
+   "sharedWith": 0
+  },
+  "11311321": {
+   "marketValue": 23148000.0,
+   "owner": "JV PARTNERS LTD",
+   "cadSrc": "DCAD",
+   "cadSitus": "2525 BOLTON BOONE DR",
+   "lienTotal": 10352736.33,
+   "sharedWith": 0
+  },
+  "11311340": {
+   "marketValue": 39000000.0,
+   "owner": "INFINITY SUNNYVALE PROPERTY LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "2200 N BELT LINE RD",
+   "lienTotal": 22837790.38,
+   "sharedWith": 0
+  },
+  "11311351": {
+   "marketValue": 4220340.0,
+   "owner": "NBC USA HOUSING INC",
+   "cadSrc": "DCAD",
+   "cadSitus": "7835 MILITARY PKWY",
+   "lienTotal": 1387717.28,
+   "sharedWith": 0
+  },
+  "11311376": {
+   "marketValue": 28750000.0,
+   "owner": "PATRIOT RIDGE I LTD CO",
+   "cadSrc": "DCAD",
+   "cadSitus": "4810 SPUR 408",
+   "lienTotal": 21034278.96,
+   "sharedWith": 0
+  },
+  "11311400": {
+   "marketValue": 12000000.0,
+   "owner": "TX TIMBERCREEK HOUSING LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "801 BECKLEYMEADE AVE",
+   "lienTotal": 12840621.07,
+   "sharedWith": 0
+  },
+  "11311404": {
+   "marketValue": 38480000.0,
+   "owner": "MIRA LAGOS APARTMENTS LTD",
+   "cadSrc": "DCAD",
+   "cadSitus": "2629 S GRAND PENINSULA DR",
+   "lienTotal": 36768500.64,
+   "sharedWith": 1
+  },
+  "11311407": {
+   "marketValue": 15650000.0,
+   "owner": null,
+   "cadSrc": "DCAD",
+   "cadSitus": "2101 N HASKELL AVE",
+   "lienTotal": 17385146.1,
+   "sharedWith": 0
+  },
+  "11311419": {
+   "marketValue": 65750000.0,
+   "owner": null,
+   "cadSrc": "DCAD",
+   "cadSitus": "4000 SIGMA RD",
+   "lienTotal": 33730917.9,
+   "sharedWith": 0
+  },
+  "11311427": {
+   "marketValue": 13855500.0,
+   "owner": null,
+   "cadSrc": "DCAD",
+   "cadSitus": "5651 NORTHWEST DR",
+   "lienTotal": 12617458.27,
+   "sharedWith": 0
+  },
+  "11311432": {
+   "marketValue": 66214280.0,
+   "owner": null,
+   "cadSrc": "DCAD",
+   "cadSitus": "9655 WHARF RD",
+   "lienTotal": 45256582.88,
+   "sharedWith": 0
+  },
+  "11311433": {
+   "marketValue": 49544440.0,
+   "owner": null,
+   "cadSrc": "DCAD",
+   "cadSitus": "3333 BLEECKER ST",
+   "lienTotal": 35783927.62,
+   "sharedWith": 0
+  },
+  "11311438": {
+   "marketValue": 18500000.0,
+   "owner": "CHICORY CT MADISON III LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "5151 VILLAGE FAIR DR",
+   "lienTotal": 19834346.11,
+   "sharedWith": 0
+  },
+  "11311439": {
+   "marketValue": 52300000.0,
+   "owner": "GRAND PRAIRIE HOUSING FINANCE CORP",
+   "cadSrc": "DCAD",
+   "cadSitus": "3951 DECHMAN DR",
+   "lienTotal": 40660502.08,
+   "sharedWith": 0
+  },
+  "11311442": {
+   "marketValue": 5300000.0,
+   "owner": "727 N ZANG LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "727 N ZANG BLVD",
+   "lienTotal": 4065698.2,
+   "sharedWith": 0
+  },
+  "11311452": {
+   "marketValue": 10000000.0,
+   "owner": "LIH ARLINGTON PARK LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "1716 CHATTANOOGA PL",
+   "lienTotal": 9599869.22,
+   "sharedWith": 0
+  },
+  "11311453": {
+   "marketValue": 26750000.0,
+   "owner": "MILLS DROWN LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "2750 E TRINITY MILLS RD",
+   "lienTotal": 16581538.43,
+   "sharedWith": 0
+  },
+  "11311461": {
+   "marketValue": 22200000.0,
+   "owner": "THROCKMORTON LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "4220 HERSCHEL AVE",
+   "lienTotal": 10528857.7,
+   "sharedWith": 0
+  },
+  "11311488": {
+   "marketValue": 29100000.0,
+   "owner": "ALULA INVESTMENTS LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "4220 ESTERS RD",
+   "lienTotal": 23555365.35,
+   "sharedWith": 0
+  },
+  "11311495": {
+   "marketValue": 40350000.0,
+   "owner": "SHEPLER CAPITAL BOW LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "120 S WESTMORELAND RD",
+   "lienTotal": 27883244.14,
+   "sharedWith": 0
+  },
+  "11311540": {
+   "marketValue": 22800000.0,
+   "owner": "PEGASUS VILLAS LTD",
+   "cadSrc": "DCAD",
+   "cadSitus": "7200 N STEMMONS FWY",
+   "lienTotal": 10414364.33,
+   "sharedWith": 0
+  },
+  "11311542": {
+   "marketValue": 56750000.0,
+   "owner": "RICHARDSON ALMA LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "1705 N GREENVILLE AVE",
+   "lienTotal": 32831613.23,
+   "sharedWith": 0
+  },
+  "11335364": {
+   "marketValue": 34028870.0,
+   "owner": "FC CONTINENTAL LANDLORD LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "1810 COMMERCE ST",
+   "lienTotal": 22441872.21,
+   "sharedWith": 0
+  },
+  "11335428": {
+   "marketValue": 13900000.0,
+   "owner": "TF DEVELOPMENT LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "1150 PINNACLE PARK BLVD",
+   "lienTotal": 6375482.54,
+   "sharedWith": 0
+  },
+  "11335484": {
+   "marketValue": 8499000.0,
+   "owner": "HILLSIDE WEST SENIORS LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "3757 FALLS BLUFF DR",
+   "lienTotal": 4581959.99,
+   "sharedWith": 0
+  },
+  "11335517": {
+   "marketValue": 47144840.0,
+   "owner": "RIDGE PARC DEV CORP",
+   "cadSrc": "DCAD",
+   "cadSitus": "6968 CLARKRIDGE DR",
+   "lienTotal": 11801192.49,
+   "sharedWith": 0
+  },
+  "11335553": {
+   "marketValue": 26392500.0,
+   "owner": "SPICEWOOD CROSSING APTS",
+   "cadSrc": "DCAD",
+   "cadSitus": "2925 KELLER SPRINGS RD",
+   "lienTotal": 8516499.49,
+   "sharedWith": 0
+  },
+  "11335570": {
+   "marketValue": 17200000.0,
+   "owner": "WINTERGREEN SENIOR APT LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "400 E WINTERGREEN RD",
+   "lienTotal": 6656181.12,
+   "sharedWith": 0
+  },
+  "11335649": {
+   "marketValue": 36500000.0,
+   "owner": "1900 PACIFIC HOLDINGS LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "1900 PACIFIC AVE",
+   "lienTotal": 26764051.88,
+   "sharedWith": 0
+  },
+  "11335662": {
+   "marketValue": 45500000.0,
+   "owner": "VR ZANG TRIANGLE HOLDINGS LIMITED PARTNERSHIP",
+   "cadSrc": "DCAD",
+   "cadSitus": "390 E OAKENWALD ST",
+   "lienTotal": 20265809.42,
+   "sharedWith": 0
+  },
+  "11335666": {
+   "marketValue": 38480000.0,
+   "owner": "MIRA LAGOS APARTMENTS LTD",
+   "cadSrc": "DCAD",
+   "cadSitus": "2629 S GRAND PENINSULA DR",
+   "lienTotal": 36768500.64,
+   "sharedWith": 1
+  },
+  "11335683": {
+   "marketValue": 36083620.0,
+   "owner": "D4DS LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "841 S POLK ST",
+   "lienTotal": 16896523.04,
+   "sharedWith": 0
+  },
+  "11335700": {
+   "marketValue": 56320000.0,
+   "owner": "DMC APARTMENTS LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "11771 MIRA LAGO BLVD",
+   "lienTotal": 37134880.32,
+   "sharedWith": 0
+  },
+  "11335763": {
+   "marketValue": 38573700.0,
+   "owner": "AUTUMN BREEZE APARTMENTS LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "301 MARS RD",
+   "lienTotal": 23291653.35,
+   "sharedWith": 0
+  },
+  "11335806": {
+   "marketValue": 24461650.0,
+   "owner": "CREST AT ILLNOIS LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "4800 W ILLINOIS AVE",
+   "lienTotal": 15834217.18,
+   "sharedWith": 0
+  },
+  "11335832": {
+   "marketValue": 57273500.0,
+   "owner": "DHFC REDBIRD LANDOWNER LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "7202 S WESTMORELAND RD",
+   "lienTotal": 35727290.42,
+   "sharedWith": 0
+  },
+  "11335842": {
+   "marketValue": 55375000.0,
+   "owner": null,
+   "cadSrc": "DCAD",
+   "cadSitus": "3232 N GARLAND AVE",
+   "lienTotal": 23780976.41,
+   "sharedWith": 0
+  },
+  "11335855": {
+   "marketValue": 55000000.0,
+   "owner": "FM HARVEST LTD",
+   "cadSrc": "DCAD",
+   "cadSitus": "1011 S PEARL EXPY",
+   "lienTotal": 32370577.12,
+   "sharedWith": 0
+  },
+  "11335904": {
+   "marketValue": 33956310.0,
+   "owner": "GIBSON GRAND PRAIRIE LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "2422 S CARRIER PKWY",
+   "lienTotal": 31092032.47,
+   "sharedWith": 0
+  },
+  "11335906": {
+   "marketValue": 30660980.0,
+   "owner": "JULIETTE FOWLER COMMUNITIES INC",
+   "cadSrc": "DCAD",
+   "cadSitus": "230 S FULTON ST",
+   "lienTotal": 8230127.37,
+   "sharedWith": 0
+  },
+  "11335909": {
+   "marketValue": 24000000.0,
+   "owner": "DHFC MIDPARK LANDOWNER LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "8550 MIDPARK RD",
+   "lienTotal": 16911779.52,
+   "sharedWith": 0
+  },
+  "11335916": {
+   "marketValue": 49900000.0,
+   "owner": "1658 SUTHERLAND LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "1658 FORUM DR",
+   "lienTotal": 42103444.2,
+   "sharedWith": 0
+  },
+  "11335928": {
+   "marketValue": 67996820.0,
+   "owner": "RICHARDSON ALMA II LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "1735 N GREENVILLE AVE",
+   "lienTotal": 66501660.33,
+   "sharedWith": 0
+  },
+  "11335931": {
+   "marketValue": 27000000.0,
+   "owner": "PALLADIUM SIMPSON STUART LTD",
+   "cadSrc": "DCAD",
+   "cadSitus": "3440 SIMPSON STUART RD",
+   "lienTotal": 33645652.17,
+   "sharedWith": 0
+  },
+  "11335935": {
+   "marketValue": 46950000.0,
+   "owner": "DAVIS 1309 MAIN LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "1309 MAIN ST",
+   "lienTotal": 52482038.65,
+   "sharedWith": 0
+  },
+  "11335966": {
+   "marketValue": 9425830.0,
+   "owner": "EMBREE EASTSIDE LTD",
+   "cadSrc": "DCAD",
+   "cadSitus": "536 DAVIDSON DR",
+   "lienTotal": 10667312.6,
+   "sharedWith": 0
+  },
+  "11335998": {
+   "marketValue": 7244160.0,
+   "owner": "TX MACARTHUR 2021 LTD",
+   "cadSrc": "DCAD",
+   "cadSitus": "400 S MACARTHUR BLVD",
+   "lienTotal": 6894688.13,
+   "sharedWith": 0
+  },
+  "11336039": {
+   "marketValue": 18560000.0,
+   "owner": "DHFC POSITANO LANDOWNER LLC",
+   "cadSrc": "DCAD",
+   "cadSitus": "2519 JOHN WEST RD",
+   "lienTotal": 20428861.99,
+   "sharedWith": 0
+  },
+  "11336064": {
+   "marketValue": 13725000.0,
+   "owner": null,
+   "cadSrc": "DCAD",
+   "cadSitus": "2000 HIGHLAND RD",
+   "lienTotal": 14963456.69,
+   "sharedWith": 0
+  },
+  "11397268": {
+   "marketValue": 7250000.0,
+   "owner": "SDC LUXAR INV LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "3110 S COCKRELL HILL RD",
+   "lienTotal": 2182793.51,
+   "sharedWith": 0
+  },
+  "11397269": {
+   "marketValue": 5700000.0,
+   "owner": "SDC EWING COURT LP",
+   "cadSrc": "DCAD",
+   "cadSitus": "1201 S EWING AVE",
+   "lienTotal": 1824484.7,
+   "sharedWith": 0
+  },
+  "11397279": {
+   "marketValue": 10000000.0,
+   "owner": null,
+   "cadSrc": "DCAD",
+   "cadSitus": "1500 N GARRETT AVE",
+   "lienTotal": 10997760.28,
+   "sharedWith": 0
+  },
+  "11311237": {
+   "marketValue": 10600000.0,
+   "owner": null,
+   "cadSrc": "TAD",
+   "cadSitus": "1701 E ROBERT ST",
+   "lienTotal": 3273024.8,
+   "sharedWith": 0
+  },
+  "11311322": {
+   "marketValue": 38913889.0,
+   "owner": "HOUSING AUTHORITY OF FTW",
+   "cadSrc": "TAD",
+   "cadSitus": "5551 NORTH TARRANT PKWY",
+   "lienTotal": 18344772.05,
+   "sharedWith": 0
+  },
+  "11311326": {
+   "marketValue": 33987866.0,
+   "owner": "HOUSING AUTHORITY OF FT WORTH",
+   "cadSrc": "TAD",
+   "cadSitus": "7425 S HULEN ST",
+   "lienTotal": 7214260.83,
+   "sharedWith": 0
+  },
+  "11311375": {
+   "marketValue": 29376024.0,
+   "owner": "FORT WORTH HOUSING AUTHORITY",
+   "cadSrc": "TAD",
+   "cadSitus": "5501 OVERTON RIDGE BLVD",
+   "lienTotal": 12321624.14,
+   "sharedWith": 0
+  },
+  "11311386": {
+   "marketValue": 55400000.0,
+   "owner": "FBC LIFESTYLE LLC",
+   "cadSrc": "TAD",
+   "cadSitus": "1600 VILLAGE DR",
+   "lienTotal": 33909646.75,
+   "sharedWith": 0
+  },
+  "11311403": {
+   "marketValue": 39348185.0,
+   "owner": "HOUSING AUTHORITY OF FTW",
+   "cadSrc": "TAD",
+   "cadSitus": "3888 POST OAK BLVD",
+   "lienTotal": 22843160.52,
+   "sharedWith": 0
+  },
+  "11311413": {
+   "marketValue": 7900000.0,
+   "owner": "TRAVIS CAPITAL GROUP LLC",
+   "cadSrc": "TAD",
+   "cadSitus": "2901 TRAVIS AVE",
+   "lienTotal": 5701760.83,
+   "sharedWith": 0
+  },
+  "11311428": {
+   "marketValue": 24700000.0,
+   "owner": null,
+   "cadSrc": "TAD",
+   "cadSitus": "6301 GRANBURY CUT OFF RD",
+   "lienTotal": 14999736.33,
+   "sharedWith": 0
+  },
+  "11311435": {
+   "marketValue": 15667960.0,
+   "owner": "ARLINGTON PARK LLC",
+   "cadSrc": "TAD",
+   "cadSitus": "3121 E PARK ROW DR",
+   "lienTotal": 17383302.76,
+   "sharedWith": 0
+  },
+  "11311491": {
+   "marketValue": 2239746.0,
+   "owner": "LAKE COMO CHURCH OF CHRIST",
+   "cadSrc": "TAD",
+   "cadSitus": "5617 FLETCHER AVE",
+   "lienTotal": 1829591.6,
+   "sharedWith": 0
+  },
+  "11311500": {
+   "marketValue": 24200000.0,
+   "owner": "BLUE LAKE AT MARINE CREEK LP",
+   "cadSrc": "TAD",
+   "cadSitus": "4700 HUFFINES BLVD",
+   "lienTotal": 13862161.68,
+   "sharedWith": 0
+  },
+  "11311560": {
+   "marketValue": 42565108.0,
+   "owner": "AHF-QUAIL RIDGE LLC",
+   "cadSrc": "TAD",
+   "cadSitus": "4500 BRENTWOOD STAIR RD",
+   "lienTotal": 20475188.46,
+   "sharedWith": 0
+  },
+  "11311561": {
+   "marketValue": 28054500.0,
+   "owner": "AHF-SILVERLEAF LLC",
+   "cadSrc": "TAD",
+   "cadSitus": "8515 JOHN T WHITE RD",
+   "lienTotal": 20442664.55,
+   "sharedWith": 0
+  },
+  "11311581": {
+   "marketValue": 24600000.0,
+   "owner": "GRAND PRAIRIE HOUSING FINANCE CORPORATION",
+   "cadSrc": "TAD",
+   "cadSitus": "3001 AVE K ",
+   "lienTotal": 17912316.57,
+   "sharedWith": 0
+  },
+  "11335382": {
+   "marketValue": 19800000.0,
+   "owner": "FOSSIL RIDGE - SH LP",
+   "cadSrc": "TAD",
+   "cadSitus": "6101 OLD DENTON RD",
+   "lienTotal": 8867287.51,
+   "sharedWith": 0
+  },
+  "11335407": {
+   "marketValue": 52600000.0,
+   "owner": "TBG INVESTORS LLC Etal",
+   "cadSrc": "TAD",
+   "cadSitus": "9500 TRINITY BLVD",
+   "lienTotal": 19078622.05,
+   "sharedWith": 0
+  },
+  "11335660": {
+   "marketValue": 47700000.0,
+   "owner": "JUNCTION CROSSING TITLEHOLDER LLC",
+   "cadSrc": "TAD",
+   "cadSitus": "10001 NORTH FWY",
+   "lienTotal": 33917264.35,
+   "sharedWith": 0
+  },
+  "11335669": {
+   "marketValue": 9300000.0,
+   "owner": "BB VILLAS AT BOSTON HEIGHTS HOUSING LP",
+   "cadSrc": "TAD",
+   "cadSitus": "3510 BOSTON AVE",
+   "lienTotal": 9497987.31,
+   "sharedWith": 0
+  },
+  "11335693": {
+   "marketValue": 14356500.0,
+   "owner": "ENCORE OLYMPUS PANTHER ISLAND LLC",
+   "cadSrc": "TAD",
+   "cadSitus": "401 N MAIN ST",
+   "lienTotal": 45427535.25,
+   "sharedWith": 0
+  },
+  "11335711": {
+   "marketValue": 28599201.0,
+   "owner": "EASTWOOD PUBLIC FACILITY CORP",
+   "cadSrc": "TAD",
+   "cadSitus": "4700 E BERRY ST",
+   "lienTotal": 7926755.01,
+   "sharedWith": 0
+  },
+  "11335739": {
+   "marketValue": 38700000.0,
+   "owner": "CHISHOLM SUMMER CREEK LLC",
+   "cadSrc": "TAD",
+   "cadSitus": "9069 SUMMER CREEK DR",
+   "lienTotal": 26939611.64,
+   "sharedWith": 0
+  },
+  "11335772": {
+   "marketValue": 70600000.0,
+   "owner": "ARLINGTON COMMONS II LLC",
+   "cadSrc": "TAD",
+   "cadSitus": "505 E LAMAR BLVD",
+   "lienTotal": 51154659.22,
+   "sharedWith": 0
+  },
+  "11335884": {
+   "marketValue": 12500000.0,
+   "owner": "ONE AMELIA PARC LP",
+   "cadSrc": "TAD",
+   "cadSitus": "6100 E LOOP 820 S",
+   "lienTotal": 9802575.51,
+   "sharedWith": 0
+  },
+  "11335901": {
+   "marketValue": 5500000.0,
+   "owner": "PALLADIUM FAIN STREET LTD",
+   "cadSrc": "TAD",
+   "cadSitus": "1069 KINGS HWY",
+   "lienTotal": 6174808.78,
+   "sharedWith": 0
+  },
+  "11335902": {
+   "marketValue": 53929585.0,
+   "owner": "FORT WORTH HOUSING FINANCE CORPORATION",
+   "cadSrc": "TAD",
+   "cadSitus": "6655 CALGARY LN",
+   "lienTotal": 23033256.71,
+   "sharedWith": 0
+  },
+  "11335925": {
+   "marketValue": 6119119.0,
+   "owner": "CSH AVENUE AT SYCAMORE PARK LTD",
+   "cadSrc": "TAD",
+   "cadSitus": "2601 AVE J ",
+   "lienTotal": 6974735.25,
+   "sharedWith": 0
+  },
+  "11335926": {
+   "marketValue": 73047924.0,
+   "owner": "CAVILE PUBLIC FACILITY CORP",
+   "cadSrc": "TAD",
+   "cadSitus": "5400 E ROSEDALE ST",
+   "lienTotal": 14945191.7,
+   "sharedWith": 0
+  },
+  "11394011": {
+   "marketValue": 19400000.0,
+   "owner": "2225 NEW YORK AVE LTD",
+   "cadSrc": "TAD",
+   "cadSitus": "2225 NEW YORK AVE",
+   "lienTotal": 1709216.48,
+   "sharedWith": 0
+  },
+  "11397275": {
+   "marketValue": 6600000.0,
+   "owner": "STALCUP HOUSING PTNRS LTD",
+   "cadSrc": "TAD",
+   "cadSitus": "3828 STALCUP RD",
+   "lienTotal": 1868963.34,
+   "sharedWith": 0
+  }
+ },
+ "summary": {
+  "tarrantCandidates": 55,
+  "tarrantMatched": 29,
+  "dallasCandidates": 105,
+  "dallasMatched": 65
+ }
+}

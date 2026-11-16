@@ -53,6 +53,7 @@ ol.cards{list-style:none;margin:0;padding:0}
 .rank{flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px}
 .title{flex:1;min-width:0}
 .title h3{margin:0;font-size:18px;line-height:1.25;color:var(--navy);overflow-wrap:anywhere}
+.title .owner{font-size:12.5px;color:var(--navy-3);margin-top:3px;font-weight:600;overflow-wrap:anywhere}
 .title .loc{font-size:13.5px;color:var(--muted);margin-top:2px}
 .score{flex:0 0 auto;text-align:right}
 .score b{display:block;font-size:30px;line-height:1;color:var(--navy);font-variant-numeric:tabular-nums}
@@ -141,6 +142,7 @@ const yearsBetween = (a, b) => (b - a) / (365.25 * 864e5);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money = v => {
   if (v == null) return null;
+  if (v < 0) return "−" + money(-v);
   const a = Math.abs(v);
   if (a >= 1e9) return "$" + (v/1e9).toFixed(2) + "B";
   if (a >= 1e6) return "$" + (v/1e6).toFixed(a >= 1e7 ? 1 : 2) + "M";
@@ -185,7 +187,7 @@ ROWS.forEach(r => {
   r.age = r.endorsed ? yearsBetween(new Date(r.endorsed + "T00:00:00"), AS_OF) : null;
   r.year = r.endorsed ? r.endorsed.slice(0,4) : null;
   r.sizeP = sizePct(r.origAmt);
-  r.equityAmt = (r.marketValue != null && r.upb != null) ? r.marketValue - r.upb : null;
+  r.equityAmt = (r.marketValue != null && r.upb != null) ? r.marketValue - (r.lienTotal ?? r.upb) : null;
   // Factor sub-scores 0..1 that do not depend on the slider
   r.s = {};
   r.s.free = r.age == null ? null : clamp(r.age / CONFIG.free.yearsToFree);
@@ -228,7 +230,8 @@ function whyLine(r, mkt){
     case "hold":
       return `Same HUD loan since ${r.year} on a ${money(r.origAmt)} original amount: long-time owner, a natural exit conversation.`;
     case "equity":
-      return `≈${money(r.equityAmt)} estimated equity (appraised value − loan balance) to unlock via sale or cash-out refi.`;
+      return `≈${money(r.equityAmt)} est. equity: ${r.cadSrc} values it at ${money(r.marketValue)} vs ${money(r.lienTotal ?? r.upb)} of HUD debt` +
+             (r.sharedWith ? ` (incl. ${r.sharedWith} other HUD loan on the same parcel)` : "") + `. Room for a sale or cash-out refi.`;
   }
   return "Insufficient data to rank.";
 }
@@ -248,8 +251,8 @@ function opener(r, mkt){
       return `${hi} The current loan on ${r.display} dates back to ${r.year}. Owners at that stage are often weighing a sale or a 1031 exchange. ` +
              `Could I share what comparable ${units}properties around ${r.cityDisp} have traded for recently?`;
     case "equity":
-      return `${hi} Based on public appraisal data, you may be sitting on significant equity in ${r.display}. ` +
-             `Would it help to see what a sale or cash-out refi could net you today?`;
+      return `${hi} Public records put ${r.display} at roughly ${money(r.marketValue)} against about ${money(r.lienTotal ?? r.upb)} of HUD debt, ` +
+             `so there may be meaningful equity to work with. Would it help to see what a sale or cash-out refi could net you today?`;
   }
   return hi;
 }
@@ -286,12 +289,12 @@ function render(mkt){
     if (r.prepayPct != null) tags.push(`<span class="tag${r.prepayPct > 0 ? " warn" : ""}">Est. prepay ${r.prepayPct}%*</span>`);
     if (r.lihtc) tags.push(`<span class="tag warn">LIHTC</span>`);
     if (r.taxExempt) tags.push(`<span class="tag warn">Tax-exempt bonds</span>`);
-    if (r.owner) tags.push(`<span class="tag">Owner: ${esc(r.owner)}</span>`);
+    if (r.cadSrc) tags.push(`<span class="tag">${esc(r.cadSrc)} value ${money(r.marketValue)}</span>`);
     const loc = [r.cityDisp, r.county && !r.county.startsWith("DFW") ? r.county + " Co." : null].filter(Boolean).join(" · ");
     return `<li class="card">
       <div class="head">
         <div class="rank">${rank}</div>
-        <div class="title"><h3>${esc(r.display)}</h3><div class="loc">${esc(loc)}${r.address ? " · " + esc(titleCase(r.address)) : ""}</div></div>
+        <div class="title"><h3>${esc(r.display)}</h3><div class="loc">${esc(loc)}${r.address ? " · " + esc(titleCase(r.address)) : ""}</div>${r.owner ? `<div class="owner">Owner of record (${esc(r.cadSrc)}): ${esc(r.owner)}</div>` : ""}</div>
         <div class="score"><b>${r.score == null ? "n/a" : Math.round(r.score)}</b><span>score</span>${delta}</div>
       </div>
       <div class="bar" aria-hidden="true">${bar}</div>
@@ -338,7 +341,7 @@ function staticSections(){
     the largest original loan amounts in the DFW set get 100% of that credit, the smallest ${Math.round(CONFIG.hold.smallestDealCredit*100)}%.
     An old loan on a big deal suggests a long-time owner who may be thinking about an exit.</p>
     <h3>4 · Equity ${hasEquity ? `(up to ${W.equity} pts)` : "(not active)"}</h3>
-    <p>${hasEquity ? "(Appraised market value − unpaid loan balance) ÷ market value. Only scored where an appraisal-district match exists." :
+    <p>${hasEquity ? "(Appraisal-district value − HUD loan balance) ÷ value, from 0 (no equity) to full credit (no debt). Only scored where an appraisal-district match exists; everywhere else equity shows n/a and the score is rescaled over the other three signals. " + esc(META.cadNote || "") :
       "Needs appraisal-district market values. Not matched in this version, so equity shows n/a and carries no weight."}</p>
     <h3>“Why call now”</h3>
     <p>The line on each card comes from whichever signal earned that property the most points.</p>
@@ -353,7 +356,7 @@ function staticSections(){
     <h4>Data sources</h4>
     <ul>${META.sources.map(s => `<li><b>${esc(s.name)}</b>: ${esc(s.note)} <span style="white-space:nowrap">As of ${esc(s.asOf)}.</span></li>`).join("")}</ul>
     <p>Loan age, prepay estimates and stats are measured to ${esc(META.loanAsOfLabel)}. Interest rates are HUD note rates (FHA mortgage insurance premium not included).
-    No phone numbers or personal information shown.</p>
+    No phone numbers or personal information shown. Owner names appear only when the appraisal-district owner of record is an entity (LLC, LP, Inc., housing authority, etc.).</p>
     ${hasEquity ? "" : `<p class="v2">v2: appraisal match (Dallas CAD / Tarrant AD market value and owner entity, for an equity estimate).</p>`}
     <p class="disc">Demo built from public data, not M&amp;M data.</p>`;
 }
