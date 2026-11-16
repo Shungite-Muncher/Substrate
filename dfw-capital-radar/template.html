@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>DFW Capital Event Radar</title>
+<style>
+:root{
+  --navy:#0b2545; --navy-2:#13315c; --navy-3:#1d4e89; --ink:#0f1b2d; --muted:#5b6b82;
+  --line:#dde4ee; --bg:#f4f7fb; --card:#ffffff; --accent:#c8a24a;
+  --refi:#1d4e89; --free:#3f8fd2; --hold:#8fb8e8; --equity:#c8a24a;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+header.top{background:var(--navy);color:#fff;padding:22px 0 18px;padding-top:calc(22px + env(safe-area-inset-top))}
+header.top h1{margin:0;font-size:26px;letter-spacing:-.01em;line-height:1.15}
+header.top .sub{margin-top:6px;color:#c9d6ea;font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
+.stat{background:var(--navy-2);border-radius:10px;padding:10px 10px 8px}
+.stat b{display:block;font-size:22px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat span{font-size:11.5px;color:#c9d6ea;line-height:1.25;display:block;margin-top:3px}
+.ratebar{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line);box-shadow:0 2px 8px rgba(11,37,69,.06)}
+.ratebar .wrap{padding-top:8px;padding-bottom:6px}
+.ratebar .row{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.ratebar label{font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.ratebar output{font-size:24px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+.ratebar .hint{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+input[type=range]{width:100%;margin:2px 0 0;accent-color:var(--navy);height:28px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--muted);margin:16px 0 4px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+section.method{margin:14px 0 4px}
+details.how{background:#fff;border:1px solid var(--line);border-radius:12px}
+details.how summary{list-style:none;cursor:pointer;padding:14px 16px;font-weight:700;color:var(--navy);display:flex;justify-content:space-between;align-items:center;font-size:16px}
+details.how summary::-webkit-details-marker{display:none}
+details.how summary::after{content:"+";font-size:22px;font-weight:400;color:var(--navy-3)}
+details.how[open] summary::after{content:"–"}
+details.how .body{padding:0 16px 14px;font-size:14.5px}
+details.how .body h3{font-size:14px;margin:14px 0 4px;color:var(--navy)}
+details.how .body p{margin:4px 0}
+.formula{background:var(--bg);border-radius:8px;padding:10px 12px;font-size:14px;margin:8px 0}
+.formula .w{font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+.assume{border-left:3px solid var(--accent);padding:6px 10px;background:#fbf7ec;border-radius:0 6px 6px 0;font-size:13.5px;margin-top:10px}
+table.funnel{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+table.funnel td{padding:5px 0;border-bottom:1px solid var(--line);vertical-align:top}
+table.funnel td.n{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;padding-left:10px;white-space:nowrap}
+h2.list{font-size:15px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:22px 0 8px}
+ol.cards{list-style:none;margin:0;padding:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 12px;box-shadow:0 1px 2px rgba(11,37,69,.04)}
+.card .head{display:flex;gap:12px;align-items:flex-start}
+.rank{flex:0 0 auto;width:34px;height:34px;border-radius:50%;background:var(--navy);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px}
+.title{flex:1;min-width:0}
+.title h3{margin:0;font-size:18px;line-height:1.25;color:var(--navy);overflow-wrap:anywhere}
+.title .loc{font-size:13.5px;color:var(--muted);margin-top:2px}
+.score{flex:0 0 auto;text-align:right}
+.score b{display:block;font-size:30px;line-height:1;color:var(--navy);font-variant-numeric:tabular-nums}
+.score span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.score .delta{display:block;font-size:12px;font-weight:600;margin-top:3px;min-height:15px}
+.delta.up{color:#1a7f4b}.delta.down{color:#b3412e}
+.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:#edf1f7;margin:12px 0 2px}
+.bar i{display:block;height:100%}
+.nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 8px;margin:12px 0 4px}
+.nums div{min-width:0}
+.nums b{display:block;font-size:19px;line-height:1.15;font-variant-numeric:tabular-nums;color:var(--ink)}
+.nums span{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.nums .na{color:#9aa7b8;font-weight:600}
+.why{margin:12px 0 0;font-weight:600;font-size:15px;color:var(--ink)}
+.why em{font-style:normal;color:var(--navy-3);font-weight:700;text-transform:uppercase;font-size:11.5px;letter-spacing:.05em;display:block;margin-bottom:2px}
+.opener{margin-top:10px;background:var(--bg);border-radius:10px;padding:10px 12px;font-size:14px;color:#24364f}
+.opener em{font-style:normal;font-weight:700;color:var(--navy);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:3px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tag{font-size:11.5px;border:1px solid var(--line);border-radius:999px;padding:2px 8px;color:var(--muted);background:#fff}
+.tag.warn{border-color:#e6d3a3;background:#fbf7ec;color:#7a5d17}
+footer{margin:26px 0 0;background:var(--navy);color:#c9d6ea;font-size:13px;padding:20px 0 calc(28px + env(safe-area-inset-bottom))}
+footer h4{color:#fff;margin:0 0 8px;font-size:14px}
+footer ul{margin:0 0 12px;padding-left:18px}
+footer li{margin:4px 0}
+footer .disc{color:#fff;font-weight:700;border-top:1px solid var(--navy-3);padding-top:12px;margin-top:8px}
+footer .v2{color:#e6cf8f}
+.noscript-note{font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <h1>DFW Capital Event Radar</h1>
+  <div class="sub">Who to call first: DFW apartment owners whose HUD loan points to a sale or refi soon</div>
+  <div class="stats" id="stats"></div>
+</div></header>
+
+<div class="ratebar"><div class="wrap">
+  <div class="row"><label for="rate">Today's market rate</label><output id="rateOut">5.75%</output></div>
+  <input id="rate" type="range" min="4" max="7.5" step="0.05" value="5.75" aria-describedby="rateHint">
+  <div class="hint" id="rateHint">Drag to re-rank · loans above this rate gain refi points</div>
+</div></div>
+
+<main class="wrap">
+  <section class="method">
+    <details class="how" id="how">
+      <summary>How it's scored</summary>
+      <div class="body" id="howBody"></div>
+    </details>
+  </section>
+
+  <div class="legend" id="legend"></div>
+  <h2 class="list" id="listTitle">Top 25 to call</h2>
+  <ol class="cards" id="cards"></ol>
+</main>
+
+<footer><div class="wrap" id="footer"></div></footer>
+
+<script>
+/* ==========================================================================
+   SCORING CONFIG: every weight and threshold lives here.
+   ========================================================================== */
+const CONFIG = {
+  marketRate: { default: 5.75, min: 4.00, max: 7.50, step: 0.05 },
+  topN: 25,
+  // Points available per factor. The final score is rescaled to 0-100 over the
+  // factors that have data for that property (missing data never counts for or against).
+  weights: { refi: 40, free: 30, hold: 30, equity: 25 },
+  refi:   { fullCreditSpread: 1.50 },           // note rate this many points above market = full refi credit
+  free:   { yearsToFree: 10 },                  // ASSUMPTION: HUD prepay penalty steps down to 0 over ~10 yrs
+  prepay: { startPct: 10, stepPerYear: 1 },     // ASSUMPTION: 10% in year 1, -1 pt per year, 0% after year 10
+  hold:   { fullCreditYears: 20, smallestDealCredit: 0.5 }, // biggest loans get 100% of age credit, smallest 50%
+  equity: { },                                  // equity share of market value (only when appraisal match exists)
+};
+
+/* ==========================================================================
+   DATA (injected at build time from HUD public files)
+   ========================================================================== */
+const META = /*__META__*/null;
+const ROWS = /*__ROWS__*/[];
+
+/* ========================================================================== */
+const $ = s => document.querySelector(s);
+const AS_OF = new Date(META.loanAsOf + "T00:00:00");
+const clamp = (x, lo=0, hi=1) => Math.max(lo, Math.min(hi, x));
+const yearsBetween = (a, b) => (b - a) / (365.25 * 864e5);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = v => {
+  if (v == null) return null;
+  const a = Math.abs(v);
+  if (a >= 1e9) return "$" + (v/1e9).toFixed(2) + "B";
+  if (a >= 1e6) return "$" + (v/1e6).toFixed(a >= 1e7 ? 1 : 2) + "M";
+  if (a >= 1e3) return "$" + Math.round(v/1e3) + "K";
+  return "$" + Math.round(v);
+};
+const pct = (v, d=2) => v == null ? null : v.toFixed(d) + "%";
+const SMALL = new Set(["at","of","the","and","on","in","a","an","for","fka","to"]);
+const ROMAN = /^(i|ii|iii|iv|v|vi|vii|viii|ix|x)$/i;
+function titleCase(s){
+  if (!s) return s;
+  const t = s.replace(/\s+/g, " ").trim();
+  if (t !== t.toUpperCase()) return t;               // already mixed case: leave as published
+  return t.toLowerCase().split(" ").map((w, i) => {
+    if (ROMAN.test(w)) return w.toUpperCase();
+    if (i > 0 && SMALL.has(w)) return w;
+    return w.replace(/(^|[-/(])([a-z])/g, (m, p, c) => p + c.toUpperCase());
+  }).join(" ");
+}
+const program = p => {
+  if (!p) return null;
+  const u = p.toUpperCase();
+  if (u.includes("223(A)(7)")) return "223(a)(7) refi";
+  if (u.includes("223(F)")) return "223(f) purchase/refi";
+  if (u.includes("221(D)(4)")) return "221(d)(4) new construction";
+  if (u.includes("542")) return "542 risk-share";
+  if (u.startsWith("231")) return "231 elderly";
+  return p;
+};
+
+// Precompute rate-independent parts once.
+const sizeSorted = ROWS.map(r => r.origAmt).filter(v => v != null).sort((a,b) => a-b);
+const sizePct = v => {
+  if (v == null || sizeSorted.length < 2) return null;
+  let lo = 0, hi = sizeSorted.length;               // count of values < v
+  while (lo < hi) { const m = (lo+hi) >> 1; if (sizeSorted[m] < v) lo = m+1; else hi = m; }
+  return lo / (sizeSorted.length - 1);
+};
+ROWS.forEach(r => {
+  r.display = titleCase(r.name);
+  r.cityDisp = titleCase(r.city);
+  r.age = r.endorsed ? yearsBetween(new Date(r.endorsed + "T00:00:00"), AS_OF) : null;
+  r.year = r.endorsed ? r.endorsed.slice(0,4) : null;
+  r.sizeP = sizePct(r.origAmt);
+  r.equityAmt = (r.marketValue != null && r.upb != null) ? r.marketValue - r.upb : null;
+  // Factor sub-scores 0..1 that do not depend on the slider
+  r.s = {};
+  r.s.free = r.age == null ? null : clamp(r.age / CONFIG.free.yearsToFree);
+  r.s.hold = (r.age == null || r.sizeP == null) ? null :
+    clamp(r.age / CONFIG.hold.fullCreditYears) *
+    (CONFIG.hold.smallestDealCredit + (1 - CONFIG.hold.smallestDealCredit) * r.sizeP);
+  r.s.equity = (r.equityAmt == null || !r.marketValue) ? null : clamp(r.equityAmt / r.marketValue);
+  r.prepayPct = r.age == null ? null :
+    Math.max(0, CONFIG.prepay.startPct - CONFIG.prepay.stepPerYear * Math.floor(r.age));
+});
+
+function scoreAll(mkt){
+  const W = CONFIG.weights;
+  ROWS.forEach(r => {
+    r.spread = r.rate == null ? null : r.rate - mkt;
+    r.s.refi = r.spread == null ? null : clamp(r.spread / CONFIG.refi.fullCreditSpread);
+    let got = 0, avail = 0; r.pts = {};
+    for (const k of ["refi","free","hold","equity"]) {
+      if (r.s[k] == null) continue;                 // missing data: excluded, not zeroed
+      avail += W[k]; r.pts[k] = W[k] * r.s[k]; got += r.pts[k];
+    }
+    r.scale = avail ? 100 / avail : 0;
+    r.score = avail ? got * r.scale : null;
+    // Lead factor = biggest contributor in points
+    r.lead = Object.keys(r.pts).sort((a,b) => r.pts[b] - r.pts[a])[0] || null;
+    r.savings = (r.spread != null && r.spread > 0 && r.upb != null) ? r.spread / 100 * r.upb : null;
+  });
+  return ROWS.slice().sort((a,b) => (b.score ?? -1) - (a.score ?? -1) || (b.upb ?? 0) - (a.upb ?? 0));
+}
+
+function whyLine(r, mkt){
+  const yrs = r.age == null ? "" : Math.floor(r.age);
+  switch (r.lead) {
+    case "refi":
+      return `${pct(r.rate)} note vs ${pct(mkt)} market: ≈${money(r.savings)}/yr less interest on today's ${money(r.upb)} balance` +
+             (r.prepayPct > 0 ? ` (est. ${r.prepayPct}% prepay still applies).` : `, and the prepay penalty has likely burned off.`);
+    case "free":
+      return `Endorsed ${r.year}, ${yrs} yrs in: HUD prepay penalty has likely stepped down to ` +
+             (r.prepayPct > 0 ? `~${r.prepayPct}%.` : `zero, so they're free to sell or refi.`);
+    case "hold":
+      return `Same HUD loan since ${r.year} on a ${money(r.origAmt)} original amount: long-time owner, a natural exit conversation.`;
+    case "equity":
+      return `≈${money(r.equityAmt)} estimated equity (appraised value − loan balance) to unlock via sale or cash-out refi.`;
+  }
+  return "Insufficient data to rank.";
+}
+
+function opener(r, mkt){
+  const hi = `Hi, I'm trying to reach the ownership of ${r.display}. This is [your name] with Marcus & Millichap in Dallas.`;
+  const units = r.units ? `${r.units}-unit ` : "";
+  switch (r.lead) {
+    case "refi":
+      return `${hi} Public HUD data shows your loan there carries a ${pct(r.rate)} rate, and today's market is around ${pct(mkt)}. ` +
+             `Our capital markets team can run a quick refi-versus-sell comparison at no cost. Would 15 minutes this week be worth it?`;
+    case "free":
+      return `${hi} Your HUD loan is ${Math.floor(r.age)} years old, so the prepayment penalty has most likely stepped down ` +
+             (r.prepayPct > 0 ? `to a few points` : `to zero`) +
+             `. That's often the cheapest window to sell or recapitalize. Could I send you a no-obligation valuation on the ${units}property?`;
+    case "hold":
+      return `${hi} The current loan on ${r.display} dates back to ${r.year}. Owners at that stage are often weighing a sale or a 1031 exchange. ` +
+             `Could I share what comparable ${units}properties around ${r.cityDisp} have traded for recently?`;
+    case "equity":
+      return `${hi} Based on public appraisal data, you may be sitting on significant equity in ${r.display}. ` +
+             `Would it help to see what a sale or cash-out refi could net you today?`;
+  }
+  return hi;
+}
+
+const FACTOR = { refi: "Refi pressure", free: "Free to transact", hold: "Long hold / exit", equity: "Equity" };
+const COLOR  = { refi: "var(--refi)", free: "var(--free)", hold: "var(--hold)", equity: "var(--equity)" };
+const hasEquity = ROWS.some(r => r.s.equity != null);
+
+function num(label, val){
+  return `<div><b class="${val == null ? "na" : ""}">${val == null ? "n/a" : esc(val)}</b><span>${label}</span></div>`;
+}
+
+let BASE_RANK = null;
+function render(mkt){
+  const ranked = scoreAll(mkt);
+  if (!BASE_RANK) { BASE_RANK = new Map(); ranked.forEach((r,i) => BASE_RANK.set(r.id, i+1)); }
+  const top = ranked.slice(0, CONFIG.topN);
+  const isDefault = Math.abs(mkt - CONFIG.marketRate.default) < 1e-9;
+  $("#rateOut").textContent = pct(mkt);
+  $("#listTitle").textContent = `Top ${CONFIG.topN} to call · market rate ${pct(mkt)}`;
+  $("#cards").innerHTML = top.map((r, i) => {
+    const rank = i + 1, base = BASE_RANK.get(r.id);
+    let delta = "";
+    if (!isDefault && base) {
+      const d = base - rank;
+      delta = d > 0 ? `<span class="delta up">▲ ${d}</span>` : d < 0 ? `<span class="delta down">▼ ${-d}</span>` :
+              `<span class="delta">–</span>`;
+      if (base > CONFIG.topN) delta = `<span class="delta up">new</span>`;
+    }
+    const bar = ["refi","free","hold","equity"].filter(k => r.pts[k] != null)
+      .map(k => `<i style="width:${(r.pts[k]*r.scale).toFixed(2)}%;background:${COLOR[k]}" title="${FACTOR[k]}: ${(r.pts[k]*r.scale).toFixed(0)} pts"></i>`).join("");
+    const tags = [];
+    if (program(r.program)) tags.push(`<span class="tag">${esc(program(r.program))}</span>`);
+    if (r.prepayPct != null) tags.push(`<span class="tag${r.prepayPct > 0 ? " warn" : ""}">Est. prepay ${r.prepayPct}%*</span>`);
+    if (r.lihtc) tags.push(`<span class="tag warn">LIHTC</span>`);
+    if (r.taxExempt) tags.push(`<span class="tag warn">Tax-exempt bonds</span>`);
+    if (r.owner) tags.push(`<span class="tag">Owner: ${esc(r.owner)}</span>`);
+    const loc = [r.cityDisp, r.county && !r.county.startsWith("DFW") ? r.county + " Co." : null].filter(Boolean).join(" · ");
+    return `<li class="card">
+      <div class="head">
+        <div class="rank">${rank}</div>
+        <div class="title"><h3>${esc(r.display)}</h3><div class="loc">${esc(loc)}${r.address ? " · " + esc(titleCase(r.address)) : ""}</div></div>
+        <div class="score"><b>${r.score == null ? "n/a" : Math.round(r.score)}</b><span>score</span>${delta}</div>
+      </div>
+      <div class="bar" aria-hidden="true">${bar}</div>
+      <div class="nums">
+        ${num("Units", r.units == null ? null : r.units.toLocaleString())}
+        ${num("Loan balance", money(r.upb))}
+        ${num("Rate", pct(r.rate))}
+        ${num("Loan age", r.age == null ? null : r.age.toFixed(1) + " yrs")}
+        ${num("Est. equity", money(r.equityAmt))}
+        ${num("Original loan", money(r.origAmt))}
+      </div>
+      <p class="why"><em>Why call now · ${FACTOR[r.lead] || ""}</em>${esc(whyLine(r, mkt))}</p>
+      <div class="opener"><em>20-second opener</em>${esc(opener(r, mkt))}</div>
+      <div class="tags">${tags.join("")}</div>
+    </li>`;
+  }).join("");
+
+  const above = ROWS.filter(r => r.rate != null && r.rate > mkt).length;
+  const free = ROWS.filter(r => r.age != null && r.age >= CONFIG.free.yearsToFree).length;
+  const upb = ROWS.reduce((s, r) => s + (r.upb || 0), 0);
+  $("#stats").innerHTML =
+    `<div class="stat"><b>${ROWS.length}</b><span>DFW HUD apartment loans screened</span></div>` +
+    `<div class="stat"><b>${above}</b><span>priced above ${pct(mkt)}</span></div>` +
+    `<div class="stat"><b>${free}</b><span>${CONFIG.free.yearsToFree}+ yrs since endorsement</span></div>`;
+  $("#stats").dataset.upb = money(upb);
+}
+
+function staticSections(){
+  const W = CONFIG.weights;
+  const base = W.refi + W.free + W.hold;
+  $("#legend").innerHTML = ["refi","free","hold"].concat(hasEquity ? ["equity"] : [])
+    .map(k => `<span><i style="background:${COLOR[k]}"></i>${FACTOR[k]}</span>`).join("");
+  $("#howBody").innerHTML = `
+    <p>Each property earns points on ${hasEquity ? "four" : "three"} signals from its public HUD loan record. Points are added up and rescaled to <b>0–100</b>.
+    If a property is missing a field, that signal is left out and the score is rescaled over the rest, so a missing field never helps or hurts.</p>
+    <div class="formula">Score = (<span class="w">${W.refi}</span> × Refi + <span class="w">${W.free}</span> × Free + <span class="w">${W.hold}</span> × Hold${hasEquity ? ` + <span class="w">${W.equity}</span> × Equity` : ""}) ÷ points available × 100</div>
+    <h3>1 · Refi pressure (up to ${W.refi} of ${base} pts)</h3>
+    <p>Loan rate minus today's market rate (the slider). Full credit at <b>${CONFIG.refi.fullCreditSpread.toFixed(2)} pts or more</b> above market, scaled down to zero at or below market.
+    These are refi leads for Marcus & Millichap Capital Corp.</p>
+    <h3>2 · Free to transact (up to ${W.free} pts)</h3>
+    <p>Years since the loan's initial endorsement ÷ ${CONFIG.free.yearsToFree}, capped at full credit after ${CONFIG.free.yearsToFree} years.</p>
+    <h3>3 · Long hold / exit (up to ${W.hold} pts)</h3>
+    <p>Years since endorsement ÷ ${CONFIG.hold.fullCreditYears} (capped), multiplied by a deal-size factor:
+    the largest original loan amounts in the DFW set get 100% of that credit, the smallest ${Math.round(CONFIG.hold.smallestDealCredit*100)}%.
+    An old loan on a big deal suggests a long-time owner who may be thinking about an exit.</p>
+    <h3>4 · Equity ${hasEquity ? `(up to ${W.equity} pts)` : "(not active)"}</h3>
+    <p>${hasEquity ? "(Appraised market value − unpaid loan balance) ÷ market value. Only scored where an appraisal-district match exists." :
+      "Needs appraisal-district market values. Not matched in this version, so equity shows n/a and carries no weight."}</p>
+    <h3>“Why call now”</h3>
+    <p>The line on each card comes from whichever signal earned that property the most points.</p>
+    <div class="assume"><b>Assumption, not data:</b> HUD loans usually carry a prepayment penalty that steps down over about 10 years.
+    This page assumes ${CONFIG.prepay.startPct}% in year 1, falling ${CONFIG.prepay.stepPerYear} pt a year to 0% after year ${CONFIG.free.yearsToFree}.
+    The actual terms are in each loan's note and vary by deal (some have lockouts). Every “Est. prepay*” tag uses this assumption.</div>
+    <h3>How the list was filtered</h3>
+    <table class="funnel">${META.counts.map(c => `<tr><td>${esc(c.step)}</td><td class="n">${c.rows.toLocaleString()}</td></tr>`).join("")}</table>
+    <p class="noscript-note" style="margin-top:8px">County comes from joining each FHA number to HUD's property-address and portfolio files.
+    ${META.countyNote ? esc(META.countyNote) : ""}</p>`;
+  $("#footer").innerHTML = `
+    <h4>Data sources</h4>
+    <ul>${META.sources.map(s => `<li><b>${esc(s.name)}</b>: ${esc(s.note)} <span style="white-space:nowrap">As of ${esc(s.asOf)}.</span></li>`).join("")}</ul>
+    <p>Loan age, prepay estimates and stats are measured to ${esc(META.loanAsOfLabel)}. Interest rates are HUD note rates (FHA mortgage insurance premium not included).
+    No phone numbers or personal information shown.</p>
+    ${hasEquity ? "" : `<p class="v2">v2: appraisal match (Dallas CAD / Tarrant AD market value and owner entity, for an equity estimate).</p>`}
+    <p class="disc">Demo built from public data, not M&amp;M data.</p>`;
+}
+
+const slider = $("#rate");
+slider.min = CONFIG.marketRate.min; slider.max = CONFIG.marketRate.max;
+slider.step = CONFIG.marketRate.step; slider.value = CONFIG.marketRate.default;
+staticSections();
+render(CONFIG.marketRate.default);
+slider.addEventListener("input", () => render(parseFloat(slider.value)));
+</script>
+</body>
+</html>
