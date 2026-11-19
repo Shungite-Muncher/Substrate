@@ -29,7 +29,8 @@
  },
  "seen": [
   "https://earthquake.usgs.gov/earthquakes/eventpage/us7000tuku",
-  "https://earthquake.usgs.gov/earthquakes/eventpage/us7000twg9"
+  "https://earthquake.usgs.gov/earthquakes/eventpage/us7000twg9",
+  "https://www.federalregister.gov/documents/2026/11/19/2026-23529/addressing-remote-access-to-advanced-semiconductors"
  ],
  "seen_parts": [
   "ESP32-S3-WROOM-1-N8R8|tariff added|2026-10-23",
