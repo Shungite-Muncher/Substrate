@@ -57,6 +57,11 @@
   "IRF540NPBF|lead time easing|2026-11-12",
   "IRF540NPBF|back in stock|2026-11-12",
   "IRF540NPBF|PBO delayed|2026-11-12",
-  "TPS62130RGTR|PBO delayed|2026-11-12"
+  "TPS62130RGTR|PBO delayed|2026-11-12",
+  "BSS138|PBO delayed|2026-11-20",
+  "IS25LP128-JBLE|lead time easing|2026-11-20",
+  "MT40A1G16TB-062E:F|PBO delayed|2026-11-20",
+  "NTMFS5C430NLT1G|backorder easing|2026-11-20",
+  "NTMFS5C430NLT1G|PBO delayed|2026-11-20"
  ]
 }
