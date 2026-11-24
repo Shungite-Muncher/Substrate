@@ -62,6 +62,8 @@
   "IS25LP128-JBLE|lead time easing|2026-11-20",
   "MT40A1G16TB-062E:F|PBO delayed|2026-11-20",
   "NTMFS5C430NLT1G|backorder easing|2026-11-20",
-  "NTMFS5C430NLT1G|PBO delayed|2026-11-20"
+  "NTMFS5C430NLT1G|PBO delayed|2026-11-20",
+  "ATMEGA328P-AU|PBO delayed|2026-11-24",
+  "MT40A1G16TB-062E:F|backorder easing|2026-11-24"
  ]
 }
