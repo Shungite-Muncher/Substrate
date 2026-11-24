@@ -1,11 +1,11 @@
 {
   "price_weight_factors": {
-    "utilization_level": 0.25,
+    "utilization_level": 0.44,
     "sales_growth": 1.4,
     "ppi_momentum": 1.27
   },
   "correlations": {
-    "utilization_level": -0.23,
+    "utilization_level": -0.032,
     "sales_growth": 0.448,
     "ppi_momentum": 0.384
   },
