@@ -9,7 +9,7 @@
   "C3M0065090D": "Buy ahead / lock pricing",
   "ESP32-S3-WROOM-1-N8R8": "Lock pricing (no need to buy ahead)",
   "IPB017N10N5ATMA1": "Lock pricing (no need to buy ahead)",
-  "IRF540NPBF": "Lock pricing (no need to buy ahead)",
+  "IRF540NPBF": "Buy ahead / lock pricing",
   "IS25LP128-JBLE": "Buy ahead / lock pricing",
   "LCMXO2-1200HC-4TG100C": "Buy ahead / lock pricing",
   "LM2596S-5.0/NOPB": "Buy ahead / lock pricing",
@@ -64,6 +64,12 @@
   "NTMFS5C430NLT1G|backorder easing|2026-11-20",
   "NTMFS5C430NLT1G|PBO delayed|2026-11-20",
   "ATMEGA328P-AU|PBO delayed|2026-11-24",
-  "MT40A1G16TB-062E:F|backorder easing|2026-11-24"
+  "MT40A1G16TB-062E:F|backorder easing|2026-11-24",
+  "ATMEGA328P-AU|backorder easing|2026-11-28",
+  "BSS138|lead time lengthening|2026-11-28",
+  "IRF540NPBF|lead time lengthening|2026-11-28",
+  "LM2596S-5.0/NOPB|PBO delayed|2026-11-28",
+  "NTMFS5C430NLT1G|backorder easing|2026-11-28",
+  "TPS62130RGTR|back in stock|2026-11-28"
  ]
 }
